@@ -635,6 +635,7 @@ function bindEvents() {
     if (b) openPage(b.dataset.page);
   });
   $('#page').onclick = (e) => {
+    if (recapClick(e)) return;
     const b = e.target.closest('[data-id]');
     if (b && !e.target.closest('[data-act]')) showGame(b.dataset.id);
   };

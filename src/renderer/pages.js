@@ -130,9 +130,121 @@ function historyHtml() {
     </div>`;
 }
 
+// ---------- Récap ----------
+
+const recap = { mode: 'month', offset: 0 };
+
+function recapRange() {
+  const now = new Date();
+  if (recap.mode === 'year') {
+    const y = now.getFullYear() + recap.offset;
+    return { from: new Date(y, 0, 1).getTime(), to: new Date(y + 1, 0, 1).getTime(), label: String(y) };
+  }
+  const d = new Date(now.getFullYear(), now.getMonth() + recap.offset, 1);
+  const label = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  return { from: d.getTime(), to: new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime(), label: label[0].toUpperCase() + label.slice(1) };
+}
+
+function recapHtml() {
+  const { from, to, label } = recapRange();
+  const list = sessionsBetween(from, to).filter((s) => state.games.has(s.game));
+  const unit = recap.mode === 'year' ? 'de l’année' : 'du mois';
+  const head = `
+    <div class="page-head"><h1>Récap</h1>
+      <div class="page-tools">
+        <div class="segmented">${[['month', 'Mois'], ['year', 'Année']].map(([m, l]) => `<button data-recap-mode="${m}" class="${recap.mode === m ? 'active' : ''}">${l}</button>`).join('')}</div>
+        <div class="period"><button data-recap-step="-1" title="Précédent">${icon('chevronLeft')}</button><b>${label}</b>
+          <button data-recap-step="1" title="Suivant" ${recap.offset >= 0 ? 'disabled' : ''}>${icon('chevronRight')}</button></div>
+      </div>
+    </div>`;
+  if (!list.length) {
+    return `${head}<div class="panel"><div class="panel-empty">${icon('sparkle')}<div>Aucune session sur cette période. Joue un peu, ton récap se remplira tout seul.</div></div></div>`;
+  }
+
+  const total = sumSeconds(list);
+  const games = perGame(list);
+  const [topId, topSec] = games[0];
+  const topGame = state.games.get(topId);
+  const longest = list.reduce((a, b) => (b.seconds > a.seconds ? b : a));
+  const activeDays = new Set(list.map((s) => dayStart(s.start))).size;
+
+  const firstSeen = new Map();
+  for (const s of state.sessions) if (!firstSeen.has(s.game)) firstSeen.set(s.game, s.start);
+  const discovered = games.filter(([id]) => firstSeen.get(id) >= from && firstSeen.get(id) < to);
+
+  const hero = `
+    <div class="recap-hero">
+      <div class="recap-art" style="background-image:url('${media(topGame.hero || topGame.cover)}')"></div>
+      ${topGame.cover ? `<img class="recap-cover" src="${media(topGame.cover)}" alt="">` : ''}
+      <div class="recap-text">
+        <small>Ton jeu ${unit}</small>
+        <h2>${esc(title(topGame))}</h2>
+        <p>${fmtDur(topSec)} · ${Math.round((topSec / total) * 100)} % de ton temps de jeu</p>
+      </div>
+    </div>`;
+
+  const tiles = `
+    <div class="tiles four">
+      <div class="tile"><small>Temps de jeu</small><b>${fmtHours(total)}</b><span>${activeDays} jour${activeDays > 1 ? 's' : ''} de jeu</span></div>
+      <div class="tile"><small>Sessions</small><b>${list.length}</b><span>${fmtDur(Math.round(total / list.length))} en moyenne</span></div>
+      <div class="tile"><small>Jeux lancés</small><b>${games.length}</b><span>${discovered.length ? `dont ${discovered.length} découverte${discovered.length > 1 ? 's' : ''}` : 'Que des habitués'}</span></div>
+      <div class="tile"><small>Plus longue session</small><b>${fmtHours(longest.seconds)}</b><span>${esc(title(state.games.get(longest.game)))}</span></div>
+    </div>`;
+
+  // When you play: time of day + weekday.
+  const slots = [['Nuit', 0, 6], ['Matin', 6, 12], ['Après-midi', 12, 18], ['Soirée', 18, 24]].map(([name, a, b]) => [
+    name,
+    sumSeconds(list.filter((s) => { const h = new Date(s.start).getHours(); return h >= a && h < b; })),
+  ]);
+  const slotMax = Math.max(...slots.map((s) => s[1]), 1);
+  const favSlot = slots.reduce((a, b) => (b[1] > a[1] ? b : a));
+  const weekdays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((name, i) => [
+    name,
+    sumSeconds(list.filter((s) => (new Date(s.start).getDay() + 6) % 7 === i)),
+  ]);
+  const wdMax = Math.max(...weekdays.map((w) => w[1]), 1);
+  const favDay = weekdays.reduce((a, b) => (b[1] > a[1] ? b : a));
+  const slotNames = { Nuit: 'la nuit', Matin: 'le matin', 'Après-midi': 'l’après-midi', Soirée: 'en soirée' };
+  const dayNames = { Lun: 'le lundi', Mar: 'le mardi', Mer: 'le mercredi', Jeu: 'le jeudi', Ven: 'le vendredi', Sam: 'le samedi', Dim: 'le dimanche' };
+
+  const habits = `
+    <div class="panel">
+      <div class="panel-head"><h3>Tes habitudes</h3><span>Surtout ${slotNames[favSlot[0]]}, ${dayNames[favDay[0]]}</span></div>
+      <div class="habits">
+        <div>${slots.map(([n, sec]) => `<div class="habit-row"><span>${n}</span><div class="meter"><i style="width:${(sec / slotMax) * 100}%"></i></div><small>${fmtHours(sec)}</small></div>`).join('')}</div>
+        <div class="week-bars">${weekdays.map(([n, sec]) => `<div class="bar" title="${n} · ${fmtDur(sec)}"><i style="height:${sec ? Math.max(4, (sec / wdMax) * 100) : 0}%"></i><small>${n}</small></div>`).join('')}</div>
+      </div>
+    </div>`;
+
+  const topMax = games[0][1];
+  const top = `
+    <div class="panel">
+      <div class="panel-head"><h3>Classement</h3><span>${games.length} jeu${games.length > 1 ? 'x' : ''}</span></div>
+      ${games.slice(0, 8).map(([id, sec], i) => {
+        const g = state.games.get(id);
+        return `<button class="top-row" data-id="${id}"><span class="rank">${i + 1}</span>${gameThumb(g)}<div><div class="top-line"><b>${esc(title(g))}</b>
+          ${discovered.some(([d]) => d === id) ? '<em class="new-tag">Nouveau</em>' : ''}<span>${fmtHours(sec)}</span></div>
+          <div class="meter"><i style="width:${(sec / topMax) * 100}%"></i></div></div></button>`;
+      }).join('')}
+    </div>`;
+
+  return `${head}${hero}${tiles}<div class="hist-row recap-row">${top}${habits}</div>`;
+}
+
 const PAGES = {
   history: { label: 'Historique', icon: 'chart', html: historyHtml },
+  recap: { label: 'Récap', icon: 'sparkle', html: recapHtml },
 };
+
+function recapClick(e) {
+  const mode = e.target.closest('[data-recap-mode]');
+  const step = e.target.closest('[data-recap-step]');
+  if (!mode && !step) return false;
+  if (mode) { recap.mode = mode.dataset.recapMode; recap.offset = 0; }
+  if (step) recap.offset = Math.min(0, recap.offset + Number(step.dataset.recapStep));
+  renderPage();
+  return true;
+}
 
 function renderPage() {
   const page = $('#page');
