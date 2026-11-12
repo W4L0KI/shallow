@@ -20,6 +20,7 @@ const COMMANDS = [
   { label: 'Historique', icon: 'chart', run: () => openPage('history') },
   { label: 'Journal', icon: 'note', run: () => openPage('journal') },
   { label: 'Récap', icon: 'sparkle', run: () => openPage('recap') },
+  { label: 'Mode manette', icon: 'gamepad', run: () => openBigPicture() },
   { label: 'Ajouter un jeu', icon: 'plus', run: () => $('#btnAdd').click() },
   { label: 'Paramètres', icon: 'settings', run: () => openSettings() },
 ];

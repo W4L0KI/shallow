@@ -1028,6 +1028,7 @@ async function init() {
   document.documentElement.style.setProperty('--card', settings.cardSize + 'px');
   bindEvents();
   bindPalette();
+  bindBigPicture();
   setGames(games);
 }
 

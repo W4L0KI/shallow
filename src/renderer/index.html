@@ -53,6 +53,7 @@
             <kbd>Ctrl F</kbd>
           </label>
           <div class="top-progress" id="artProgress" hidden><span class="spinner"></span><span id="artProgressText"></span></div>
+          <button class="top-btn no-drag" id="btnBigPicture" title="Mode manette (F11)" data-icon="gamepad"></button>
           <div class="win-controls no-drag">
             <button id="winMin" title="Réduire"><svg viewBox="0 0 12 12"><path d="M2 6h8" /></svg></button>
             <button id="winMax" title="Agrandir"><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="1" /></svg></button>
@@ -90,6 +91,8 @@
     <div class="modal-backdrop" id="modal" hidden><div class="modal" id="modalBody"></div></div>
     <div class="toasts" id="toasts"></div>
 
+    <div class="bp" id="bp" hidden></div>
+
     <div class="palette-backdrop" id="palette" hidden>
       <div class="palette">
         <label class="palette-input"><span data-icon="search"></span><input id="paletteInput" type="text" placeholder="Lancer un jeu, ouvrir une page…" spellcheck="false" autocomplete="off" /><kbd>Échap</kbd></label>
@@ -102,5 +105,6 @@
     <script src="app.js"></script>
     <script src="pages.js"></script>
     <script src="palette.js"></script>
+    <script src="bigpicture.js"></script>
   </body>
 </html>

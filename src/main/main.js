@@ -47,7 +47,8 @@ function createWindow() {
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   win.once('ready-to-show', () => (ws.maximized ? win.maximize() : win.show()));
   win.on('close', () => {
-    library.updateSettings({ window: { maximized: win.isMaximized(), bounds: win.getNormalBounds() } });
+    // Full screen (mode manette) is not a window state to restore: reopen maximized instead.
+    library.updateSettings({ window: { maximized: win.isMaximized() || win.isFullScreen(), bounds: win.getNormalBounds() } });
     library.saveNow();
   });
   win.on('maximize', () => send('window:state', true));
@@ -201,6 +202,7 @@ function registerIpc() {
   ipcMain.on('window:minimize', () => win.minimize());
   ipcMain.on('window:maximize', () => (win.isMaximized() ? win.unmaximize() : win.maximize()));
   ipcMain.on('window:close', () => win.close());
+  ipcMain.on('window:fullscreen', (_e, on) => win.setFullScreen(!!on));
 }
 
 launcher.on('started', (id) => send('game:updated', decorate(library.get(id))));

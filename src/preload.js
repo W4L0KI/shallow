@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('api', {
     minimize: () => ipcRenderer.send('window:minimize'),
     maximize: () => ipcRenderer.send('window:maximize'),
     close: () => ipcRenderer.send('window:close'),
+    fullscreen: (on) => ipcRenderer.send('window:fullscreen', on),
   },
   onLibraryChanged: on('library:changed'),
   onGameUpdated: on('game:updated'),
