@@ -29,8 +29,22 @@ class Library {
       this.data.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
       this.data.games = raw.games || {};
       this.data.sessions = raw.sessions || [];
+      this._dailyBackup();
     } catch {}
     this._saveTimer = null;
+  }
+
+  // One copy of library.json per day in backups/, the 7 most recent are kept.
+  _dailyBackup() {
+    try {
+      const dir = path.join(this.dir, 'backups');
+      fs.mkdirSync(dir, { recursive: true });
+      const day = new Date().toISOString().slice(0, 10);
+      const dest = path.join(dir, `library-${day}.json`);
+      if (!fs.existsSync(dest)) fs.copyFileSync(this.file, dest);
+      const old = fs.readdirSync(dir).filter((f) => /^library-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(0, -7);
+      for (const f of old) fs.rmSync(path.join(dir, f), { force: true });
+    } catch {}
   }
 
   save() {

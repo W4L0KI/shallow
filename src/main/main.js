@@ -10,6 +10,20 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'media', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
 ]);
 
+// Dev/test runs can point at another data folder so they never touch the real library.
+const dataDir = process.argv.find((a) => a.startsWith('--data-dir='));
+if (dataDir) app.setPath('userData', path.resolve(dataDir.slice(11)));
+
+// One Shallow at a time: two instances would overwrite each other's library.json.
+const primary = app.requestSingleInstanceLock();
+if (!primary) app.quit();
+app.on('second-instance', () => {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+});
+
 let win;
 let library;
 const launcher = new Launcher();
@@ -251,6 +265,7 @@ launcher.on('stopped', (id, seconds, start) => {
 launcher.on('error', (id, message) => send('toast', { type: 'error', text: `Impossible de lancer le jeu : ${message}` }));
 
 app.whenReady().then(() => {
+  if (!primary) return;
   library = new Library(app.getPath('userData'));
 
   // media://local/<encoded absolute path> — only serves images referenced by the library.
