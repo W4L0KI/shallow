@@ -4,7 +4,7 @@ const path = require('path');
 const { EventEmitter } = require('events');
 const { listExes } = require('./scanner');
 
-const POLL_MS = 15000;
+const POLL_MS = 5000;
 const GRACE_MS = 60000; // launchers/UAC prompts can take a while before the game shows up
 const STORE_GRACE_MS = 180000; // Steam/Epic may update or sync saves before starting the game
 const GENERIC = /^(launcher|unins\d*|unitycrashhandler(32|64)?|crashhandler|crs-.*|qtwebengineprocess|steam|cefprocess|.*setup|.*redist.*)\.exe$/i;
@@ -98,8 +98,12 @@ class Launcher extends EventEmitter {
     const now = Date.now();
     for (const [id, s] of this.sessions) {
       const alive = [...s.images].some((img) => images.has(img));
-      if (alive) s.lastSeen = now;
-      else if (now - s.start > s.grace) {
+      if (alive) {
+        s.lastSeen = now;
+        s.seen = true;
+      } else if (s.seen || now - s.start > s.grace) {
+        // The grace period only covers the game not having started yet: once we've seen it
+        // running, it disappearing means it was closed.
         this.sessions.delete(id);
         const seconds = Math.max(0, Math.round((s.lastSeen - s.start) / 1000));
         this.emit('stopped', id, seconds, s.start);

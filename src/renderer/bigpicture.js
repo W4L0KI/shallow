@@ -48,11 +48,15 @@ function setPadKind(kind) {
 function bpShelves() {
   const games = [...state.games.values()].filter((g) => !g.hidden);
   const byName = (a, b) => title(a).localeCompare(title(b), 'fr', { sensitivity: 'base' });
+  const from = (source) => games.filter((g) => (g.source || 'local') === source).sort(byName);
   const shelves = [
-    { label: 'Récents', games: games.filter((g) => g.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed) },
     { label: 'Favoris', games: games.filter((g) => g.favorite).sort(byName) },
-    { label: 'Tous les jeux', games: [...games].sort(byName) },
+    { label: 'Récents', games: games.filter((g) => g.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed) },
+    { label: 'Mes jeux', games: from('local') },
+    { label: 'Steam', games: from('steam') },
+    { label: 'Epic Games', games: from('epic') },
     ...allCollections().map((c) => ({ label: c, games: games.filter((g) => (g.collections || []).includes(c)).sort(byName) })),
+    { label: 'Tous les jeux', games: [...games].sort(byName) },
   ];
   return shelves.filter((s) => s.games.length);
 }
@@ -90,7 +94,7 @@ function renderBP() {
     <div class="bp-row" id="bpRow">${
       shelf
         ? shelf.games
-            .map((g, i) => `<button class="bp-card ${i === bp.index ? 'on' : ''}" data-i="${i}">${bpCardArt(g)}${g.running ? '<span class="card-badge">En cours</span>' : ''}</button>`)
+            .map((g, i) => `<button class="bp-card ${i === bp.index ? 'on' : ''}" data-i="${i}" data-id="${g.id}">${bpCardArt(g)}${g.running ? '<span class="card-badge">En cours</span>' : ''}</button>`)
             .join('')
         : '<div class="bp-empty">Aucun jeu à afficher.</div>'
     }</div>
@@ -154,6 +158,16 @@ function bpFocus(smooth = true) {
     <div class="bp-meta">${g.favorite ? `<span class="bp-fav">${icon('heartFill')}</span>` : ''}${meta.join('<i>•</i>')}</div>`;
   const logo = $('#bpInfo').querySelector('.bp-logo');
   if (logo) logo.onerror = () => (logo.outerHTML = `<h1>${esc(title(g))}</h1>`);
+}
+
+// Redraw one game's card (cover + "En cours" badge) from its live record.
+function bpRefreshCard(id) {
+  if (!bp.open) return;
+  const g = state.games.get(id);
+  const card = $('#bpRow') && $('#bpRow').querySelector(`.bp-card[data-id="${CSS.escape(id)}"]`);
+  if (g && card) card.innerHTML = `${bpCardArt(g)}${g.running ? '<span class="card-badge">En cours</span>' : ''}`;
+  const focused = bpGame();
+  if (focused && focused.id === id) bpFocus(false);
 }
 
 function bpMove(dx) {
@@ -324,7 +338,7 @@ function bindBigPicture() {
     true
   );
   // Keep the view in sync when a game starts/stops or gets new art while the mode is open.
-  api.onGameUpdated(() => bp.open && setTimeout(() => bp.open && bpFocus(false), 0));
+  api.onGameUpdated((g) => g && bp.open && setTimeout(() => bpRefreshCard(g.id), 0));
   addEventListener('gamepadconnected', (e) => {
     setPadKind(padKind(e.gamepad));
     toast({ text: `Manette ${bp.pad === 'ps' ? 'PlayStation' : 'Xbox'} détectée · ${bp.pad === 'ps' ? 'Options' : 'Start'} pour le mode manette` });
