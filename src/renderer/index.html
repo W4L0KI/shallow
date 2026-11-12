@@ -30,6 +30,9 @@
         <div class="side-title nav-title">Activité</div>
         <nav class="nav" id="navActivity"></nav>
 
+        <div class="side-title nav-title" id="colTitle" hidden>Collections</div>
+        <nav class="nav nav-scroll" id="navCollections"></nav>
+
         <div class="side-section">
           <div class="side-title">Favoris</div>
           <div class="fav-list" id="favList"></div>
@@ -65,6 +68,7 @@
               <h2 id="libTitle">Bibliothèque</h2>
               <span class="lib-count" id="libCount"></span>
               <div class="lib-tools">
+                <select class="filter-select" id="statusFilter" title="Filtrer par statut"></select>
                 <div class="segmented" id="sortSeg"></div>
                 <label class="size-slider" title="Taille des covers">
                   <span data-icon="grid"></span>

@@ -5,6 +5,7 @@ const state = {
   settings: {},
   view: 'all',
   page: null, // full-page view (see pages.js) shown instead of hero + grid
+  status: '', // grid filter on game status ('' = all, 'none' = no status)
   sessions: [],
   query: '',
   selectedId: null,
@@ -18,6 +19,22 @@ const VIEWS = [
   { id: 'new', label: 'Jamais lancés', icon: 'sparkle' },
   { id: 'hidden', label: 'Masqués', icon: 'eyeOff' },
 ];
+
+const STATUSES = [
+  { id: 'backlog', label: 'À faire' },
+  { id: 'playing', label: 'Commencé' },
+  { id: 'finished', label: 'Terminé' },
+  { id: 'abandoned', label: 'Abandonné' },
+];
+const statusLabel = (id) => (STATUSES.find((s) => s.id === id) || {}).label;
+
+const allCollections = () =>
+  [...new Set([...state.games.values()].flatMap((g) => g.collections || []))].sort((a, b) => a.localeCompare(b, 'fr'));
+
+function viewLabel() {
+  if (state.view.startsWith('col:')) return state.view.slice(4);
+  return VIEWS.find((v) => v.id === state.view).label;
+}
 
 const SORTS = [
   { id: 'name', label: 'A–Z' },
@@ -125,6 +142,8 @@ function visibleGames() {
   if (state.view === 'favorites') list = list.filter((g) => g.favorite);
   if (state.view === 'recent') list = list.filter((g) => g.lastPlayed);
   if (state.view === 'new') list = list.filter((g) => !g.lastPlayed);
+  if (state.view.startsWith('col:')) list = list.filter((g) => (g.collections || []).includes(state.view.slice(4)));
+  if (state.status) list = list.filter((g) => (state.status === 'none' ? !g.status : g.status === state.status));
   if (q) list = list.filter((g) => title(g).toLowerCase().includes(q) || g.name.toLowerCase().includes(q));
 
   const sort = state.view === 'recent' ? 'recent' : state.settings.sort;
@@ -165,6 +184,16 @@ function renderNav() {
     .join('');
   $('#navActivity').innerHTML = Object.entries(PAGES)
     .map(([id, p]) => `<button class="nav-item ${state.page === id ? 'active' : ''}" data-page="${id}">${icon(p.icon)}<span>${p.label}</span></button>`)
+    .join('');
+
+  const cols = allCollections();
+  $('#colTitle').hidden = !cols.length;
+  $('#navCollections').innerHTML = cols
+    .map((c) => {
+      const n = all.filter((g) => !g.hidden && (g.collections || []).includes(c)).length;
+      return `<button class="nav-item ${!state.page && state.view === 'col:' + c ? 'active' : ''}" data-view="col:${esc(c)}">
+        ${icon('folder')}<span class="nav-label">${esc(c)}</span><span class="count">${n}</span></button>`;
+    })
     .join('');
 
   const favs = all.filter((g) => g.favorite && !g.hidden).sort((a, b) => title(a).localeCompare(title(b), 'fr'));
@@ -223,9 +252,9 @@ function renderHero() {
     g.lastPlayed && `<span>${icon('gamepad')}${fmtLastPlayed(g.lastPlayed)}</span>`,
   ].filter(Boolean);
 
-  const eyebrow = g.running
-    ? '<span class="pill live">En cours</span>'
-    : `<span class="pill">${g.lastPlayed ? 'Continuer' : 'À découvrir'}</span>`;
+  const eyebrow =
+    (g.running ? '<span class="pill live">En cours</span>' : `<span class="pill">${g.lastPlayed ? 'Continuer' : 'À découvrir'}</span>`) +
+    (g.status ? `<span class="pill status-${g.status}">${statusLabel(g.status)}</span>` : '');
 
   hero.innerHTML = `
     <div class="hero-art ${g.hero ? '' : 'blurred'}" style="background-image:url('${bg}')"></div>
@@ -292,8 +321,7 @@ function renderGrid({ animate = true } = {}) {
     img.complete && img.naturalWidth ? setGlow() : img.addEventListener('load', setGlow, { once: true });
   });
 
-  const view = VIEWS.find((v) => v.id === state.view);
-  $('#libTitle').textContent = state.query ? 'Résultats' : view.label;
+  $('#libTitle').textContent = state.query ? 'Résultats' : viewLabel();
   $('#libCount').textContent = list.length;
   const empty = $('#empty');
   empty.hidden = list.length > 0;
@@ -311,6 +339,10 @@ function renderSort() {
     (s) => `<button data-sort="${s.id}" class="${state.settings.sort === s.id ? 'active' : ''}">${s.label}</button>`
   ).join('');
   $('#sortSeg').style.display = state.view === 'recent' ? 'none' : '';
+  $('#statusFilter').innerHTML = [['', 'Tous les statuts'], ...STATUSES.map((s) => [s.id, s.label]), ['none', 'Sans statut']]
+    .map(([id, l]) => `<option value="${id}" ${state.status === id ? 'selected' : ''}>${l}</option>`)
+    .join('');
+  $('#statusFilter').classList.toggle('on', !!state.status);
 }
 
 function renderAll(opts) {
@@ -413,6 +445,10 @@ function openMenu(id, x, y) {
     ${g.running ? `<button data-m="stop" class="danger">${icon('stop')}Forcer l’arrêt</button>` : ''}
     <button data-m="fav">${icon(g.favorite ? 'heartFill' : 'heart')}${g.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}</button>
     <hr>
+    <div class="menu-label">Statut</div>
+    <div class="menu-status">${STATUSES.map((s) => `<button data-status="${s.id}" class="status-${s.id} ${g.status === s.id ? 'on' : ''}">${s.label}</button>`).join('')}</div>
+    <button data-m="collections">${icon('folder')}Collections…</button>
+    <hr>
     <button data-m="edit">${icon('edit')}Modifier…</button>
     <button data-m="folder">${icon('folder')}Ouvrir le dossier</button>
     <button data-m="art">${icon('refresh')}Re-télécharger les images</button>
@@ -422,12 +458,19 @@ function openMenu(id, x, y) {
   const r = menu.getBoundingClientRect();
   menu.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
   menu.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
-  menu.onclick = (e) => {
+  menu.onclick = async (e) => {
+    const st = e.target.closest('[data-status]');
+    if (st) {
+      closeMenu();
+      const status = g.status === st.dataset.status ? null : st.dataset.status;
+      return refreshGame(await api.updateGame(id, { status }));
+    }
     const b = e.target.closest('[data-m]');
     if (!b) return;
     closeMenu();
     ({
       play: () => launch(id),
+      collections: () => openCollections(id),
       stop: () => api.stop(id),
       fav: () => toggleFav(id),
       edit: () => openEdit(id),
@@ -533,6 +576,98 @@ function openEdit(id) {
   );
 }
 
+function openCollections(id) {
+  const g = state.games.get(id);
+  const rows = () => {
+    const mine = state.games.get(id).collections || [];
+    const cols = allCollections();
+    return cols.length
+      ? cols.map((c) => `<button class="col-row ${mine.includes(c) ? 'on' : ''}" data-col="${esc(c)}"><i class="check">${icon('check')}</i><span>${esc(c)}</span></button>`).join('')
+      : '<div class="hint" style="padding:4px 2px">Aucune collection pour l’instant. Crée la première ci-dessous.</div>';
+  };
+  openModal(
+    `<div class="modal-head"><h3>Collections · ${esc(title(g))}</h3><button class="close-x" data-close>${icon('x')}</button></div>
+    <div class="modal-body">
+      <div class="col-list" id="cList">${rows()}</div>
+      <div class="field" style="margin:16px 0 0"><label>Nouvelle collection</label>
+        <div class="row"><input class="input" id="cNew" placeholder="ex : Coop, À finir, Soirée entre potes" maxlength="40"><button class="btn" id="cAdd">${icon('plus')}Créer</button></div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn primary" data-close>Terminé</button></div>`,
+    (root) => {
+      const set = async (cols) => {
+        refreshGame(await api.updateGame(id, { collections: cols }));
+        root.querySelector('#cList').innerHTML = rows();
+      };
+      root.querySelector('#cList').onclick = (e) => {
+        const b = e.target.closest('[data-col]');
+        if (!b) return;
+        const mine = state.games.get(id).collections || [];
+        const c = b.dataset.col;
+        set(mine.includes(c) ? mine.filter((x) => x !== c) : [...mine, c]);
+      };
+      const add = () => {
+        const input = root.querySelector('#cNew');
+        const name = input.value.trim();
+        if (!name) return;
+        const mine = state.games.get(id).collections || [];
+        if (!mine.includes(name)) set([...mine, name]);
+        input.value = '';
+      };
+      root.querySelector('#cAdd').onclick = add;
+      root.querySelector('#cNew').onkeydown = (e) => e.key === 'Enter' && add();
+      root.querySelector('#cNew').focus();
+    }
+  );
+}
+
+// Rename or delete a collection everywhere it is used.
+async function editCollection(name, newName) {
+  const games = [...state.games.values()].filter((g) => (g.collections || []).includes(name));
+  for (const g of games) {
+    const cols = g.collections.filter((c) => c !== name);
+    if (newName && !cols.includes(newName)) cols.push(newName);
+    state.games.set(g.id, await api.updateGame(g.id, { collections: cols }));
+  }
+  if (state.view === 'col:' + name) state.view = newName ? 'col:' + newName : 'all';
+  renderAll({ animate: false });
+}
+
+function openCollectionMenu(name, x, y) {
+  const menu = $('#menu');
+  menu.innerHTML = `<div class="menu-head">${esc(name)}</div>
+    <button data-c="rename">${icon('edit')}Renommer…</button>
+    <button data-c="delete" class="danger">${icon('trash')}Supprimer la collection</button>`;
+  menu.hidden = false;
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
+  menu.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+  menu.onclick = (e) => {
+    const b = e.target.closest('[data-c]');
+    if (!b) return;
+    closeMenu();
+    if (b.dataset.c === 'delete') {
+      editCollection(name, null);
+      return toast({ text: `Collection « ${name} » supprimée (les jeux restent dans ta bibliothèque)` });
+    }
+    openModal(
+      `<div class="modal-head"><h3>Renommer la collection</h3><button class="close-x" data-close>${icon('x')}</button></div>
+      <div class="modal-body"><input class="input" id="rName" value="${esc(name)}" maxlength="40"></div>
+      <div class="modal-foot"><button class="btn ghost" data-close>Annuler</button><button class="btn primary" id="rSave">${icon('check')}Renommer</button></div>`,
+      (root) => {
+        const save = () => {
+          const v = root.querySelector('#rName').value.trim();
+          closeModal();
+          if (v && v !== name) editCollection(name, v);
+        };
+        root.querySelector('#rSave').onclick = save;
+        root.querySelector('#rName').onkeydown = (e) => e.key === 'Enter' && save();
+        root.querySelector('#rName').select();
+      }
+    );
+  };
+}
+
 function openSettings() {
   const s = state.settings;
   const rootsHtml = () =>
@@ -626,9 +761,20 @@ function setGames(list) {
 }
 
 function bindEvents() {
-  $('#nav').onclick = (e) => {
+  $('#nav').onclick = $('#navCollections').onclick = (e) => {
     const b = e.target.closest('[data-view]');
     if (b) setView(b.dataset.view);
+  };
+  $('#navCollections').oncontextmenu = (e) => {
+    const b = e.target.closest('[data-view]');
+    if (!b) return;
+    e.preventDefault();
+    openCollectionMenu(b.dataset.view.slice(4), e.clientX, e.clientY);
+  };
+  $('#statusFilter').onchange = (e) => {
+    state.status = e.target.value;
+    renderSort();
+    renderGrid();
   };
   document.querySelector('.sidebar').addEventListener('click', (e) => {
     const b = e.target.closest('[data-page]');
