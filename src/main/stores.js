@@ -99,13 +99,19 @@ function epicGames() {
   } catch {
     return [];
   }
+  // While a game updates, Epic moves its manifest to Pending/: an already-installed game still counts.
+  try {
+    for (const f of fs.readdirSync(path.join(dir, 'Pending'))) if (f.endsWith('.item') && !files.includes(f)) files.push(path.join('Pending', f));
+  } catch {}
   const games = [];
   for (const f of files) {
     try {
       const j = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
       const cats = j.AppCategories || [];
       if (!j.LaunchExecutable || !cats.includes('games') || cats.includes('hidden') || cats.some((c) => c.startsWith('plugins'))) continue;
-      if (j.bIsIncompleteInstall || !fs.existsSync(j.InstallLocation)) continue;
+      const pending = f.startsWith('Pending');
+      if (!fs.existsSync(j.InstallLocation)) continue;
+      if (pending ? !fs.existsSync(path.join(j.InstallLocation, j.LaunchExecutable)) : j.bIsIncompleteInstall) continue;
       const exe = path.join(j.InstallLocation, j.LaunchExecutable);
       const scanned = scanFolder(j.InstallLocation) || {};
       games.push({
@@ -117,6 +123,8 @@ function epicGames() {
         exe: fs.existsSync(exe) ? exe : scanned.exe || '',
         args: '',
         candidates: scanned.candidates || [],
+        epicNamespace: j.CatalogNamespace,
+        epicItemId: j.CatalogItemId,
         launchUri: `com.epicgames.launcher://apps/${j.CatalogNamespace}%3A${j.CatalogItemId}%3A${j.AppName}?action=launch&silent=true`,
       });
     } catch {}

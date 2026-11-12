@@ -31,6 +31,8 @@ const ROMAN = { i: '1', ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', v
 const normTokens = (s) => tokens(s).map((t) => ROMAN[t] || t);
 
 function similarity(a, b) {
+  // "Wheel Mates" and "WheelMates" are the same title.
+  if (normTokens(a).join('') && normTokens(a).join('') === normTokens(b).join('')) return 1;
   const A = new Set(normTokens(a));
   const B = new Set(normTokens(b));
   if (!A.size || !B.size) return 0;
@@ -67,7 +69,7 @@ async function steamItems(appids) {
   const q = {
     ids: appids.map((appid) => ({ appid })),
     context: { language: 'french', country_code: 'FR' },
-    data_request: { include_assets: true, include_basic_info: true, include_release: true },
+    data_request: { include_assets: true, include_basic_info: true, include_release: true, include_screenshots: true },
   };
   const url = `https://api.steampowered.com/IStoreBrowseService/GetItems/v1?input_json=${encodeURIComponent(JSON.stringify(q))}`;
   const data = await getJson(url);
@@ -127,6 +129,8 @@ function steamInfo(item) {
   const a = item.assets;
   const b = item.basic_info || {};
   const release = item.release && item.release.steam_release_date;
+  // Background: library hero, then the legacy CDN copy, the store page background, and a full-size screenshot.
+  const shots = ((item.screenshots && item.screenshots.all_ages_screenshots) || []).map((s) => STEAM_ASSETS + s.filename.replace(/\.jpg/, '.1920x1080.jpg'));
   return {
     steamAppId: item.appid,
     steamName: item.name.replace(/[™®©]/g, '').trim(),
@@ -136,10 +140,51 @@ function steamInfo(item) {
     publisher: (b.publishers || []).map((d) => d.name).join(', '),
     year: release ? new Date(release * 1000).getFullYear() : null,
     urls: {
-      cover: assetUrl(a, a.library_capsule_2x || a.library_capsule),
-      hero: assetUrl(a, a.library_hero_2x || a.library_hero || a.page_background),
+      cover: [assetUrl(a, a.library_capsule_2x || a.library_capsule), `${LEGACY_CDN}${item.appid}/library_600x900_2x.jpg`],
+      hero: [
+        assetUrl(a, a.library_hero_2x || a.library_hero),
+        `${LEGACY_CDN}${item.appid}/library_hero.jpg`,
+        shots[0],
+        assetUrl(a, a.page_background),
+      ],
       logo: [assetUrl(a, 'logo_2x.png'), assetUrl(a, 'logo.png'), `${LEGACY_CDN}${item.appid}/logo.png`],
     },
+  };
+}
+
+// --- Epic Games: the launcher keeps the catalog of your games (with their art) on disk ---
+
+const EPIC_CATALOG = path.join(process.env.ProgramData || 'C:\\ProgramData', 'Epic', 'EpicGamesLauncher', 'Data', 'Catalog', 'catcache.bin');
+
+function epicCatalog() {
+  try {
+    return JSON.parse(Buffer.from(fs.readFileSync(EPIC_CATALOG, 'utf8'), 'base64').toString('utf8'));
+  } catch {
+    return [];
+  }
+}
+
+// Exact item for an installed Epic game, or the closest title among the games you own on Epic.
+function epicInfo(name, { itemId, namespace } = {}) {
+  const items = epicCatalog().filter((it) => (it.keyImages || []).some((k) => k.type === 'DieselGameBoxTall'));
+  let it = itemId && items.find((x) => x.id === itemId);
+  if (!it) {
+    const ranked = items
+      .filter((x) => !namespace || x.namespace === namespace)
+      .map((x) => ({ x, score: similarity(name, x.title) }))
+      .filter((r) => r.score >= (namespace ? 0.3 : 0.6))
+      .sort((a, b) => b.score - a.score);
+    it = ranked.length && ranked[0].x;
+  }
+  if (!it) return null;
+  const img = (type, size) => (it.keyImages.filter((k) => k.type === type).map((k) => `${k.url}${size ? `?resize=1&${size}` : ''}`));
+  return {
+    // The cache stores "®" as a literal "?": an installed game keeps its manifest name instead.
+    steamName: itemId && it.id === itemId ? undefined : it.title.replace(/[™®©�]|\?$/g, '').trim(),
+    partialMatch: false,
+    description: it.description || '',
+    developer: it.developer || '',
+    urls: { cover: img('DieselGameBoxTall', 'w=600&h=800'), hero: img('DieselGameBox', 'w=1920&h=1080'), logo: img('DieselGameBoxLogo') },
   };
 }
 
@@ -151,8 +196,11 @@ async function wikipediaCover(name) {
   const data = await getJson(url);
   const page = data.query && Object.values(data.query.pages)[0];
   if (!page || !page.original) return null;
-  return { description: page.extract || '', urls: { cover: page.original.source, hero: null, logo: [] } };
+  return { description: page.extract || '', urls: { cover: [page.original.source], hero: [], logo: [] } };
 }
+
+// "BOMBANANA! Demo" -> "BOMBANANA!": demos and playtests often have no store art of their own.
+const baseGameName = (name) => name.replace(/\s*[-–:(]?\s*\b(demo|playtest|prologue|beta|trial)\b\)?.*$/i, '').trim();
 
 async function download(url, dest) {
   const res = await fetch(url, { headers: { 'User-Agent': UA } });
@@ -162,18 +210,35 @@ async function download(url, dest) {
 }
 
 // Downloads art for a game into dir; returns the fields to merge into the game record.
-async function fetchArt(name, id, dir, { appid, steamName } = {}) {
+async function fetchArt(name, id, dir, { appid, steamName, epicNamespace, epicItemId } = {}) {
   let info = null;
-  let source = 'steam';
-  try {
-    if (appid) {
-      const [item] = await steamItems([appid]);
-      if (item && item.assets) info = steamInfo({ ...item, name: steamName || item.name });
-    } else {
+  let source = 'epic';
+  // Installed Epic games: the launcher's catalog has their exact art.
+  if (epicNamespace || epicItemId) info = epicInfo(name, { itemId: epicItemId, namespace: epicNamespace });
+  // Epic's catalog rarely has a transparent logo: borrow Steam's when it is clearly the same game.
+  if (info && !info.urls.logo.length) {
+    try {
       const item = await findSteamApp(name);
-      if (item) info = steamInfo(item);
-    }
-  } catch {}
+      if (item && similarity(name, item.name) >= 0.8) info.urls.logo = steamInfo(item).urls.logo;
+    } catch {}
+  }
+  if (!info) {
+    source = 'steam';
+    try {
+      if (appid) {
+        const [item] = await steamItems([appid]);
+        if (item && item.assets && item.assets.library_capsule) info = steamInfo({ ...item, name: steamName || item.name });
+      }
+      if (!info) {
+        const item = await findSteamApp(appid ? baseGameName(steamName || name) : name);
+        if (item) info = { ...steamInfo(item), ...(appid ? { steamName: steamName || name, steamAppId: appid } : {}) };
+      }
+    } catch {}
+  }
+  if (!info) {
+    source = 'epic';
+    info = epicInfo(baseGameName(name));
+  }
   if (!info) {
     source = 'wikipedia';
     try {
@@ -187,24 +252,22 @@ async function fetchArt(name, id, dir, { appid, steamName } = {}) {
   const out = { coverSource: source };
   const file = (kind, ext) => path.join(dir, `${id}-${kind}-${stamp}.${ext}`);
 
-  // Remove previous auto-downloaded art for this game.
-  for (const f of fs.readdirSync(dir)) if (f.startsWith(`${id}-`)) fs.rmSync(path.join(dir, f), { force: true });
-
-  if (info.urls.cover) {
-    const p = file('cover', 'jpg');
-    if (await download(info.urls.cover, p)) out.cover = p;
-  }
-  if (info.urls.hero) {
-    const p = file('hero', 'jpg');
-    if (await download(info.urls.hero, p)) out.hero = p;
-  }
-  for (const u of info.urls.logo) {
-    const p = file('logo', 'png');
-    if (await download(u, p)) {
-      out.logo = p;
-      break;
+  // Each kind has candidates in order of preference; keep the first one that downloads.
+  const first = async (urls, kind, ext) => {
+    for (const u of (urls || []).filter(Boolean)) {
+      const p = file(kind, ext);
+      if (await download(u, p).catch(() => false)) return p;
     }
-  }
+    return undefined;
+  };
+  out.cover = await first(info.urls.cover, 'cover', 'jpg');
+  out.hero = await first(info.urls.hero, 'hero', 'jpg');
+  out.logo = await first(info.urls.logo, 'logo', 'png');
+  for (const k of ['cover', 'hero', 'logo']) if (!out[k]) delete out[k];
+  if (!out.cover) return null;
+  // Only now drop the previous auto-downloaded art, so a failed fetch never leaves the game without images.
+  const keep = new Set([out.cover, out.hero, out.logo].filter(Boolean).map((p) => path.basename(p)));
+  for (const f of fs.readdirSync(dir)) if (f.startsWith(`${id}-`) && !keep.has(f)) fs.rmSync(path.join(dir, f), { force: true });
   for (const k of ['steamAppId', 'steamName', 'partialMatch', 'description', 'developer', 'publisher', 'year']) {
     if (info[k] !== undefined) out[k] = info[k];
   }

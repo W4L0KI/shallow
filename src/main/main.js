@@ -88,13 +88,18 @@ function pumpArt() {
     const { id, opts: queued } = artQueue.shift();
     const g = library.get(id);
     if (!g) continue;
-    // Steam games know their exact app: no need to guess from the name.
-    const opts = !queued.appid && g.source === 'steam' ? { ...queued, appid: g.steamAppId, steamName: g.name } : queued;
+    // Store games know exactly which app they are: no need to guess from the name.
+    let opts = queued;
+    if (!opts.appid && g.source === 'steam') opts = { ...opts, appid: Number(g.id.slice(6)) || g.steamAppId, steamName: g.name };
+    if (g.source === 'epic') opts = { ...opts, epicNamespace: g.epicNamespace, epicItemId: g.epicItemId };
     artActive++;
     send('art:progress', { id, pending: artQueue.length + artActive });
+    library.update(id, { artTriedAt: Date.now() });
     fetchArt(g.name, g.id, library.artDir, opts)
       .then((art) => {
         const patch = { artFetched: true, ...(art || {}) };
+        // A successful fetch replaces the whole set: drop a background/logo the new source doesn't have.
+        if (art) for (const k of ['hero', 'logo']) if (!(k in art)) patch[k] = null;
         // Keep pictures the user picked by hand unless they explicitly asked for new ones.
         if (!opts.force && g.custom && g.custom.cover) delete patch.cover;
         if (!opts.force && g.custom && g.custom.hero) delete patch.hero;
@@ -119,11 +124,30 @@ function allGames() {
   return library.list().map(decorate);
 }
 
+const ART_RETRY_MS = 6 * 3600 * 1000;
+// Bump when image sources improve: games still missing art are retried right away.
+const ART_VERSION = 2;
+
+// Images to (re)download: never fetched, a file vanished from disk, or something is still missing
+// (retried every few hours, sources get new art and the network may have failed).
+function needsArt(g, sourcesChanged) {
+  if (!g.artFetched) return true;
+  const gone = (p) => p && !fs.existsSync(p);
+  if (gone(g.cover) || gone(g.hero) || gone(g.logo)) return true;
+  const incomplete = !g.cover || !g.hero;
+  return incomplete && !(g.custom && g.custom.cover && g.custom.hero) && (sourcesChanged || Date.now() - (g.artTriedAt || 0) > ART_RETRY_MS);
+}
+
 function rescan() {
   library.rescan();
-  for (const g of library.list()) if (!g.artFetched) queueArt(g.id);
+  const sourcesChanged = library.settings.artVersion !== ART_VERSION;
+  for (const g of library.list()) if (needsArt(g, sourcesChanged)) queueArt(g.id);
+  if (sourcesChanged) library.updateSettings({ artVersion: ART_VERSION });
   return allGames();
 }
+
+// The renderer reports an image that failed to display: fetch it again, once per run.
+const brokenReported = new Set();
 
 // --- IPC ------------------------------------------------------------------
 
@@ -133,14 +157,16 @@ function registerIpc() {
   ipcMain.handle('library:rescan', () => rescan());
   ipcMain.handle('game:update', (_e, id, patch) => decorate(library.update(id, patch)));
 
-  ipcMain.handle('game:launch', (_e, id) => {
+  ipcMain.handle('game:launch', (_e, id, opts = {}) => {
     const g = library.get(id);
     if (!g) return { ok: false, error: 'Jeu introuvable' };
     const viaStore = g.launchUri && !(g.custom && g.custom.exe);
     if (!viaStore && !fs.existsSync(g.exe)) return { ok: false, error: `Exécutable introuvable :\n${g.exe}` };
     const res = launcher.launch(g);
     library.update(id, { lastPlayed: Date.now() });
-    if (library.settings.minimizeOnLaunch && !res.already) setTimeout(() => win && win.minimize(), 1200);
+    // In mode manette the full-screen window stays behind the game, like a console home screen:
+    // minimizing a full-screen window is what produced the glitchy transition.
+    if (library.settings.minimizeOnLaunch && !res.already && !opts.keepWindow) setTimeout(() => win && win.minimize(), 1200);
     return res;
   });
   ipcMain.handle('game:stop', (_e, id) => launcher.stop(id));
@@ -149,6 +175,11 @@ function registerIpc() {
     if (g) g.exe && fs.existsSync(g.exe) ? shell.showItemInFolder(g.exe) : shell.openPath(g.folder);
   });
   ipcMain.handle('game:refetchArt', (_e, id, opts) => queueArt(id, { ...opts, force: true }, true));
+  ipcMain.handle('game:artBroken', (_e, id) => {
+    if (brokenReported.has(id) || !library.get(id)) return;
+    brokenReported.add(id);
+    queueArt(id, {}, true);
+  });
 
   ipcMain.handle('game:pickImage', async (_e, id, kind) => {
     const res = await dialog.showOpenDialog(win, {
@@ -215,6 +246,7 @@ launcher.on('stopped', (id, seconds, start) => {
   send('game:updated', decorate(updated));
   send('session:ended', { id, seconds, session });
   if (win && win.isMinimized() && !launcher.runningIds().length) win.restore();
+  else if (win && win.isFullScreen()) win.focus(); // back to mode manette after Alt+F4 / quitting the game
 });
 launcher.on('error', (id, message) => send('toast', { type: 'error', text: `Impossible de lancer le jeu : ${message}` }));
 

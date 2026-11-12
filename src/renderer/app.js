@@ -931,6 +931,22 @@ function bindEvents() {
     }
   };
 
+  // An image of the library that fails to display (file gone, corrupt download): show the
+  // placeholder right away and ask the main process to fetch the art again.
+  document.addEventListener(
+    'error',
+    (e) => {
+      const img = e.target;
+      if (img.tagName !== 'IMG' || !img.src.startsWith('media:')) return;
+      const file = decodeURIComponent(new URL(img.src).pathname.slice(1));
+      const g = [...state.games.values()].find((x) => [x.cover, x.hero, x.logo].includes(file));
+      if (!g) return;
+      api.artBroken(g.id);
+      if (img.parentElement.matches('.card-art, .bp-card')) img.outerHTML = `<div class="placeholder loading" style="--h:${hue(title(g))}">${icon('gamepad')}${esc(title(g))}</div>`;
+    },
+    true
+  );
+
   $('#scroll').addEventListener('scroll', () => $('.topbar').classList.toggle('solid', $('#scroll').scrollTop > 40), { passive: true });
 
   document.addEventListener('click', (e) => {

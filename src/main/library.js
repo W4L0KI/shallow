@@ -128,8 +128,12 @@ class Library {
       this._merge(f);
       seen.add(f.id);
     }
+    const importOn = { steam: importSteam, epic: importEpic };
     for (const g of this.list()) {
-      if (g.manual ? !fs.existsSync(g.exe) : !seen.has(g.id)) delete this.data.games[g.id];
+      // A store game being updated or verified drops out of its launcher's list for a while:
+      // keep it (with its favourites, status, notes…) as long as its folder is still there.
+      const updating = g.source && g.source !== 'local' && importOn[g.source] && fs.existsSync(g.folder);
+      if (g.manual ? !fs.existsSync(g.exe) : !seen.has(g.id) && !updating) delete this.data.games[g.id];
     }
     this.save();
     return this.list();
