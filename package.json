@@ -1,7 +1,7 @@
 {
   "name": "shallow-launcher",
   "productName": "Shallow",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Launcher de jeux local avec covers, favoris et suivi du temps de jeu",
   "main": "src/main/main.js",
   "author": "Walid",
