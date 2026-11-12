@@ -1,0 +1,48 @@
+{
+  "name": "shallow-launcher",
+  "productName": "Shallow",
+  "version": "1.0.1",
+  "description": "Launcher de jeux local avec covers, favoris et suivi du temps de jeu",
+  "main": "src/main/main.js",
+  "author": "Walid",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "icon": "electron scripts/make-icon.js",
+    "dist": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.walid.shallow",
+    "productName": "Shallow",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico",
+      "artifactName": "Shallow-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Shallow",
+      "runAfterFinish": true,
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "uninstallDisplayName": "Shallow"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3"
+  }
+}

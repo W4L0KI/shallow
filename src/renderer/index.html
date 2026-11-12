@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' media: https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    />
+    <title>Shallow</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="ambient" aria-hidden="true">
+      <div class="ambient-layer" id="ambientA"></div>
+      <div class="ambient-layer" id="ambientB"></div>
+      <div class="ambient-veil"></div>
+    </div>
+
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand drag">
+          <div class="brand-mark">
+            <svg viewBox="0 0 32 32"><defs><linearGradient id="bm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent)"/><stop offset="1" stop-color="var(--accent-2)"/></linearGradient></defs><path d="M4 20c4-1.5 7.5-1.5 12 0s8 1.5 12 0v4c-4 1.5-7.5 1.5-12 0s-8-1.5-12 0z" fill="url(#bm)" opacity=".55"/><path d="M4 12c4-1.5 7.5-1.5 12 0s8 1.5 12 0v4c-4 1.5-7.5 1.5-12 0s-8-1.5-12 0z" fill="url(#bm)"/></svg>
+          </div>
+          <span class="brand-name">Shallow</span>
+        </div>
+
+        <nav class="nav" id="nav"></nav>
+
+        <div class="side-section">
+          <div class="side-title">Favoris</div>
+          <div class="fav-list" id="favList"></div>
+        </div>
+
+        <div class="side-bottom">
+          <div class="side-stats" id="sideStats"></div>
+          <button class="side-btn" id="btnAdd" data-icon="plus">Ajouter un jeu</button>
+          <button class="side-btn" id="btnSettings" data-icon="settings">Paramètres</button>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar drag">
+          <label class="search no-drag">
+            <span data-icon="search"></span>
+            <input id="search" type="text" placeholder="Rechercher un jeu…" spellcheck="false" autocomplete="off" />
+            <kbd>Ctrl F</kbd>
+          </label>
+          <div class="top-progress" id="artProgress" hidden><span class="spinner"></span><span id="artProgressText"></span></div>
+          <div class="win-controls no-drag">
+            <button id="winMin" title="Réduire"><svg viewBox="0 0 12 12"><path d="M2 6h8" /></svg></button>
+            <button id="winMax" title="Agrandir"><svg viewBox="0 0 12 12"><rect x="2.5" y="2.5" width="7" height="7" rx="1" /></svg></button>
+            <button id="winClose" class="close" title="Fermer"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" /></svg></button>
+          </div>
+        </header>
+
+        <div class="scroll" id="scroll">
+          <section class="hero" id="hero"></section>
+
+          <section class="library">
+            <div class="lib-head">
+              <h2 id="libTitle">Bibliothèque</h2>
+              <span class="lib-count" id="libCount"></span>
+              <div class="lib-tools">
+                <div class="segmented" id="sortSeg"></div>
+                <label class="size-slider" title="Taille des covers">
+                  <span data-icon="grid"></span>
+                  <input type="range" id="cardSize" min="140" max="280" step="10" />
+                </label>
+              </div>
+            </div>
+            <div class="grid" id="grid"></div>
+            <div class="empty" id="empty" hidden></div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div class="menu" id="menu" hidden></div>
+    <div class="modal-backdrop" id="modal" hidden><div class="modal" id="modalBody"></div></div>
+    <div class="toasts" id="toasts"></div>
+
+    <script src="icons.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
