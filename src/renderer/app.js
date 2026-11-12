@@ -818,16 +818,17 @@ function openSettings() {
 
 // ---------- toasts ----------
 
-function toast({ type = 'info', title: t, text, game }) {
+function toast({ type = 'info', title: t, text, game, action }) {
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   const visual = game && game.cover ? `<img src="${media(game.cover)}" alt="">` : `<div class="t-ic">${icon(type === 'error' ? 'x' : 'sparkle')}</div>`;
-  el.innerHTML = `${visual}<div>${t ? `<b>${esc(t)}</b>` : ''}<small>${esc(text)}</small></div>`;
+  el.innerHTML = `${visual}<div>${t ? `<b>${esc(t)}</b>` : ''}<small>${esc(text)}</small></div>${action ? `<button class="toast-action">${esc(action.label)}</button>` : ''}`;
+  if (action) el.querySelector('.toast-action').onclick = () => { action.run(); el.remove(); };
   $('#toasts').appendChild(el);
   setTimeout(() => {
     el.classList.add('out');
     setTimeout(() => el.remove(), 300);
-  }, type === 'error' ? 6000 : 3200);
+  }, type === 'error' ? 6000 : action ? 9000 : 3200);
 }
 
 // ---------- events ----------
@@ -864,7 +865,7 @@ function bindEvents() {
     if (b) openPage(b.dataset.page);
   });
   $('#page').onclick = (e) => {
-    if (recapClick(e)) return;
+    if (recapClick(e) || journalClick(e)) return;
     const b = e.target.closest('[data-id]');
     if (b && !e.target.closest('[data-act]')) showGame(b.dataset.id);
   };
@@ -1002,9 +1003,16 @@ function bindEvents() {
     if (session) {
       state.sessions.push(session);
       renderNav();
-      if (state.page) renderPage();
+      // Don't wipe a journal note being typed.
+      if (state.page && !document.activeElement.classList.contains('journal-note')) renderPage();
     }
-    if (g) toast({ title: 'Session terminée', text: `${title(g)} · ${fmtPlaytime(seconds) || 'moins d’une minute'}`, game: g });
+    if (g)
+      toast({
+        title: 'Session terminée',
+        text: `${title(g)} · ${fmtPlaytime(seconds) || 'moins d’une minute'}`,
+        game: g,
+        action: session && { label: 'Ajouter une note', run: () => noteSession(session.id) },
+      });
   });
   api.onToast(toast);
   api.onWindowState((max) => ($('#winMax').title = max ? 'Restaurer' : 'Agrandir'));

@@ -231,8 +231,108 @@ function recapHtml() {
   return `${head}${hero}${tiles}<div class="hist-row recap-row">${top}${habits}</div>`;
 }
 
+// ---------- Journal ----------
+
+const journal = { onlyNotes: false, focus: null };
+
+function journalHtml() {
+  const list = [...state.sessions]
+    .reverse()
+    .filter((s) => state.games.has(s.game) && (!journal.onlyNotes || s.note))
+    .slice(0, 300);
+  const withNotes = state.sessions.filter((s) => s.note).length;
+  const head = `
+    <div class="page-head"><h1>Journal</h1><span class="lib-count">${withNotes} note${withNotes > 1 ? 's' : ''}</span>
+      <div class="page-tools"><div class="segmented">
+        <button data-journal="all" class="${journal.onlyNotes ? '' : 'active'}">Toutes les sessions</button>
+        <button data-journal="notes" class="${journal.onlyNotes ? 'active' : ''}">Avec une note</button>
+      </div></div>
+    </div>`;
+  if (!list.length) {
+    return `${head}<div class="panel"><div class="panel-empty">${icon('note')}<div>${
+      journal.onlyNotes ? 'Aucune note pour l’instant. Ajoute-en une sous n’importe quelle session.' : 'Ton journal se remplit à chaque session lancée depuis Shallow.'
+    }</div></div></div>`;
+  }
+
+  const days = new Map();
+  for (const s of list) {
+    const d = dayStart(s.start);
+    if (!days.has(d)) days.set(d, []);
+    days.get(d).push(s);
+  }
+  const time = (ts) => new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const body = [...days.entries()]
+    .map(([d, items]) => {
+      const label = new Date(d).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: new Date(d).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+      const rows = items
+        .map((s) => {
+          const g = state.games.get(s.game);
+          return `<div class="journal-entry">
+            <button class="journal-thumb" data-id="${s.game}" title="Afficher le jeu">${gameThumb(g)}</button>
+            <div class="journal-main">
+              <div class="journal-line"><button class="journal-game" data-id="${s.game}">${esc(title(g))}</button>
+                <small>${time(s.start)} → ${time(s.start + s.seconds * 1000)}</small><span class="session-dur">${fmtDur(s.seconds)}</span></div>
+              <textarea class="journal-note" data-session="${s.id}" rows="1" placeholder="Ajouter une note sur cette session…" maxlength="1000">${esc(s.note || '')}</textarea>
+            </div>
+          </div>`;
+        })
+        .join('');
+      return `<div class="journal-day"><div class="journal-date"><b>${label[0].toUpperCase() + label.slice(1)}</b><span>${fmtDur(sumSeconds(items))}</span></div>${rows}</div>`;
+    })
+    .join('');
+  return `${head}<div class="panel journal">${body}</div>`;
+}
+
+function autosize(t) {
+  t.style.height = 'auto';
+  t.style.height = t.scrollHeight + 'px';
+}
+
+// Called after the journal is rendered: notes save themselves when you leave the field.
+function mountJournal(page) {
+  page.querySelectorAll('.journal-note').forEach((t) => {
+    autosize(t);
+    t.oninput = () => autosize(t);
+    t.onkeydown = (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); t.blur(); }
+      if (e.key === 'Escape') { e.stopPropagation(); t.blur(); }
+    };
+    t.onchange = async () => {
+      const note = t.value.trim() || null;
+      const s = await api.updateSession(t.dataset.session, { note });
+      if (!s) return;
+      Object.assign(state.sessions.find((x) => x.id === s.id), s);
+      t.classList.add('saved');
+      setTimeout(() => t.classList.remove('saved'), 900);
+      const count = page.querySelector('.page-head .lib-count');
+      const n = state.sessions.filter((x) => x.note).length;
+      if (count) count.textContent = `${n} note${n > 1 ? 's' : ''}`;
+    };
+  });
+  if (journal.focus) {
+    const t = page.querySelector(`.journal-note[data-session="${CSS.escape(journal.focus)}"]`);
+    journal.focus = null;
+    if (t) { t.scrollIntoView({ block: 'center' }); t.focus(); }
+  }
+}
+
+function journalClick(e) {
+  const b = e.target.closest('[data-journal]');
+  if (!b) return false;
+  journal.onlyNotes = b.dataset.journal === 'notes';
+  renderPage();
+  return true;
+}
+
+function noteSession(sessionId) {
+  journal.focus = sessionId;
+  journal.onlyNotes = false;
+  openPage('journal');
+}
+
 const PAGES = {
   history: { label: 'Historique', icon: 'chart', html: historyHtml },
+  journal: { label: 'Journal', icon: 'note', html: journalHtml, mount: mountJournal },
   recap: { label: 'Récap', icon: 'sparkle', html: recapHtml },
 };
 
@@ -257,6 +357,7 @@ function renderPage() {
   page.classList.remove('in');
   void page.offsetWidth;
   page.classList.add('in');
+  if (PAGES[state.page].mount) PAGES[state.page].mount(page);
   // Ambient glow follows the most played game of the month.
   const top = perGame(sessionsBetween(Date.now() - 30 * DAY, Date.now() + 1))[0];
   const g = top && state.games.get(top[0]);
