@@ -538,7 +538,8 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px;
 .list-row button:hover { background: rgba(255,93,108,.15); color: var(--danger); }
 
 .toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; }
-.toggle b { font-weight: 550; display: block; }
+.toggle b { font-weight: 550; display: flex; align-items: center; gap: 8px; }
+.toggle .inline-ic { width: 16px; height: 16px; color: var(--text-2); }
 .toggle small { color: var(--muted); font-size: 12px; }
 .switch { position: relative; width: 42px; height: 24px; flex: none; }
 .switch input { display: none; }

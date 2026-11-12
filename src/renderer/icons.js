@@ -23,7 +23,8 @@ const ICONS = {
   gamepad: '<path d="M7.5 7.5h9a4.5 4.5 0 0 1 4.4 5.5l-.9 4a2.5 2.5 0 0 1-4.3 1.1L14 16h-4l-1.7 2.1A2.5 2.5 0 0 1 4 17l-.9-4a4.5 4.5 0 0 1 4.4-5.5z"/><path d="M8 10.5v3M6.5 12h3"/><circle cx="15.5" cy="11" r=".9" fill="currentColor"/><circle cx="17.5" cy="13" r=".9" fill="currentColor"/>',
   steam: '<circle cx="12" cy="12" r="8.5"/><circle cx="15" cy="9.5" r="2.2"/><path d="M3.8 13.8l4.7 2a2.2 2.2 0 1 0 1-3l-1.7-.8"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
-  chevronLeft: '<path d="M14.5 6l-6 6 6 6"/>',
+  epic: '<path d="M6 3.5h12v13.2l-6 3.8-6-3.8z"/><path d="M14.2 7.5H9.8v7h4.4M9.8 11h3.6"/>',
+  chevronLeft:'<path d="M14.5 6l-6 6 6 6"/>',
   chevronRight: '<path d="M9.5 6l6 6-6 6"/>',
   chart:'<path d="M4 20h16"/><rect x="5.5" y="11" width="3" height="6" rx="1"/><rect x="10.5" y="6" width="3" height="11" rx="1"/><rect x="15.5" y="9" width="3" height="8" rx="1"/>',
 };

@@ -6,6 +6,7 @@ const { listExes } = require('./scanner');
 
 const POLL_MS = 15000;
 const GRACE_MS = 60000; // launchers/UAC prompts can take a while before the game shows up
+const STORE_GRACE_MS = 180000; // Steam/Epic may update or sync saves before starting the game
 const GENERIC = /^(launcher|unins\d*|unitycrashhandler(32|64)?|crashhandler|crs-.*|qtwebengineprocess|steam|cefprocess|.*setup|.*redist.*)\.exe$/i;
 
 function parseArgs(str) {
@@ -47,6 +48,8 @@ class Launcher extends EventEmitter {
 
   launch(game) {
     if (this.sessions.has(game.id)) return { ok: true, already: true };
+    // Store games go through their launcher (Steam/Epic handle updates, DRM and overlays).
+    if (game.launchUri && !(game.custom && game.custom.exe)) return this._track(game, this._openUri(game.launchUri), STORE_GRACE_MS);
     const cwd = path.dirname(game.exe);
     const args = parseArgs(game.args);
     try {
@@ -60,13 +63,22 @@ class Launcher extends EventEmitter {
     } catch (err) {
       this._shellStart(game.exe, args, cwd);
     }
+    return this._track(game, { ok: true }, GRACE_MS);
+  }
 
-    const images = new Set([path.basename(game.exe).toLowerCase()]);
+  _track(game, res, grace) {
+    const images = new Set(game.exe ? [path.basename(game.exe).toLowerCase()] : []);
     for (const e of listExes(game.folder)) if (!GENERIC.test(e.name)) images.add(e.name.toLowerCase());
     const now = Date.now();
-    this.sessions.set(game.id, { start: now, lastSeen: now, images });
+    this.sessions.set(game.id, { start: now, lastSeen: now, images, grace });
     this.emit('started', game.id);
     if (!this.timer) this.timer = setInterval(() => this._poll(), POLL_MS);
+    return res;
+  }
+
+  _openUri(uri) {
+    // No cmd.exe here: it would mangle the "%3A" and "&" of Epic URIs.
+    spawn('rundll32.exe', ['url.dll,FileProtocolHandler', uri], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     return { ok: true };
   }
 
@@ -87,7 +99,7 @@ class Launcher extends EventEmitter {
     for (const [id, s] of this.sessions) {
       const alive = [...s.images].some((img) => images.has(img));
       if (alive) s.lastSeen = now;
-      else if (now - s.start > GRACE_MS) {
+      else if (now - s.start > s.grace) {
         this.sessions.delete(id);
         const seconds = Math.max(0, Math.round((s.lastSeen - s.start) / 1000));
         this.emit('stopped', id, seconds, s.start);

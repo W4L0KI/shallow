@@ -6,6 +6,7 @@ const state = {
   view: 'all',
   page: null, // full-page view (see pages.js) shown instead of hero + grid
   status: '', // grid filter on game status ('' = all, 'none' = no status)
+  source: '', // grid filter on where the game comes from ('' = all, 'local', 'steam', 'epic')
   sessions: [],
   query: '',
   selectedId: null,
@@ -26,6 +27,8 @@ const STATUSES = [
   { id: 'finished', label: 'Terminé' },
   { id: 'abandoned', label: 'Abandonné' },
 ];
+const SOURCES = [['local', 'Mes dossiers'], ['steam', 'Steam'], ['epic', 'Epic Games']];
+
 const statusLabel = (id) => (STATUSES.find((s) => s.id === id) || {}).label;
 
 const allCollections = () =>
@@ -143,6 +146,7 @@ function visibleGames() {
   if (state.view === 'recent') list = list.filter((g) => g.lastPlayed);
   if (state.view === 'new') list = list.filter((g) => !g.lastPlayed);
   if (state.view.startsWith('col:')) list = list.filter((g) => (g.collections || []).includes(state.view.slice(4)));
+  if (state.source) list = list.filter((g) => (g.source || 'local') === state.source);
   if (state.status) list = list.filter((g) => (state.status === 'none' ? !g.status : g.status === state.status));
   if (q) list = list.filter((g) => title(g).toLowerCase().includes(q) || g.name.toLowerCase().includes(q));
 
@@ -246,6 +250,8 @@ function renderHero() {
   state.selectedId = g.id;
   const bg = media(g.hero || g.cover);
   const meta = [
+    g.source === 'steam' && `<span>${icon('steam')}Steam</span>`,
+    g.source === 'epic' && `<span>${icon('epic')}Epic Games</span>`,
     g.developer && `<span>${esc(g.developer.split(',')[0])}</span>`,
     g.year && `<span>${g.year}</span>`,
     `<span>${icon('clock')}${fmtPlaytime(g.playtime) || 'Jamais joué'}</span>`,
@@ -343,6 +349,13 @@ function renderSort() {
     .map(([id, l]) => `<option value="${id}" ${state.status === id ? 'selected' : ''}>${l}</option>`)
     .join('');
   $('#statusFilter').classList.toggle('on', !!state.status);
+
+  const sources = new Set([...state.games.values()].map((g) => g.source || 'local'));
+  $('#sourceFilter').hidden = sources.size < 2;
+  $('#sourceFilter').innerHTML = [['', 'Toutes les sources'], ...SOURCES.filter(([id]) => sources.has(id))]
+    .map(([id, l]) => `<option value="${id}" ${state.source === id ? 'selected' : ''}>${l}</option>`)
+    .join('');
+  $('#sourceFilter').classList.toggle('on', !!state.source);
 }
 
 function renderAll(opts) {
@@ -683,6 +696,12 @@ function openSettings() {
         <div class="row" style="margin-top:8px"><button class="btn small" id="sAddRoot">${icon('plus')}Ajouter un dossier</button><button class="btn small" id="sRescan">${icon('refresh')}Rescanner</button></div>
         <div class="hint">Chaque sous-dossier est considéré comme un jeu. L’exécutable principal est détecté automatiquement.</div>
       </div>
+      <div class="field"><label>Launchers</label>
+        <label class="toggle" style="margin-bottom:8px"><div><b>${icon('steam', 'inline-ic')}Importer les jeux Steam</b><small>Jeux installés dans toutes tes bibliothèques Steam, lancés via Steam.</small></div>
+          <span class="switch"><input type="checkbox" id="sSteam" ${s.importSteam !== false ? 'checked' : ''}><i></i></span></label>
+        <label class="toggle"><div><b>${icon('epic', 'inline-ic')}Importer les jeux Epic Games</b><small>Jeux installés avec l’Epic Games Launcher, lancés via Epic.</small></div>
+          <span class="switch"><input type="checkbox" id="sEpic" ${s.importEpic !== false ? 'checked' : ''}><i></i></span></label>
+      </div>
       <div class="field"><label>Dossiers ignorés</label>
         <input class="input" id="sExcluded" value="${esc(s.excluded.join(', '))}" placeholder="Séparés par des virgules">
       </div>
@@ -723,6 +742,13 @@ function openSettings() {
         toast({ text: `${state.games.size} jeux trouvés` });
       };
       root.querySelector('#sMin').onchange = (e) => save({ minimizeOnLaunch: e.target.checked });
+      const storeToggle = (key) => async (e) => {
+        await save({ [key]: e.target.checked });
+        setGames(await api.rescan());
+        toast({ text: `${state.games.size} jeux dans la bibliothèque` });
+      };
+      root.querySelector('#sSteam').onchange = storeToggle('importSteam');
+      root.querySelector('#sEpic').onchange = storeToggle('importEpic');
       root.querySelectorAll('[data-accent]').forEach((b) =>
         (b.onclick = async () => {
           await save({ accent: b.dataset.accent });
@@ -773,6 +799,11 @@ function bindEvents() {
   };
   $('#statusFilter').onchange = (e) => {
     state.status = e.target.value;
+    renderSort();
+    renderGrid();
+  };
+  $('#sourceFilter').onchange = (e) => {
+    state.source = e.target.value;
     renderSort();
     renderGrid();
   };

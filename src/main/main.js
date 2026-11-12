@@ -84,9 +84,11 @@ function queueArt(id, opts = {}, front = false) {
 
 function pumpArt() {
   while (artActive < 3 && artQueue.length) {
-    const { id, opts } = artQueue.shift();
+    const { id, opts: queued } = artQueue.shift();
     const g = library.get(id);
     if (!g) continue;
+    // Steam games know their exact app: no need to guess from the name.
+    const opts = !queued.appid && g.source === 'steam' ? { ...queued, appid: g.steamAppId, steamName: g.name } : queued;
     artActive++;
     send('art:progress', { id, pending: artQueue.length + artActive });
     fetchArt(g.name, g.id, library.artDir, opts)
@@ -133,7 +135,8 @@ function registerIpc() {
   ipcMain.handle('game:launch', (_e, id) => {
     const g = library.get(id);
     if (!g) return { ok: false, error: 'Jeu introuvable' };
-    if (!fs.existsSync(g.exe)) return { ok: false, error: `Exécutable introuvable :\n${g.exe}` };
+    const viaStore = g.launchUri && !(g.custom && g.custom.exe);
+    if (!viaStore && !fs.existsSync(g.exe)) return { ok: false, error: `Exécutable introuvable :\n${g.exe}` };
     const res = launcher.launch(g);
     library.update(id, { lastPlayed: Date.now() });
     if (library.settings.minimizeOnLaunch && !res.already) setTimeout(() => win && win.minimize(), 1200);
@@ -142,7 +145,7 @@ function registerIpc() {
   ipcMain.handle('game:stop', (_e, id) => launcher.stop(id));
   ipcMain.handle('game:openFolder', (_e, id) => {
     const g = library.get(id);
-    if (g) shell.showItemInFolder(g.exe);
+    if (g) g.exe && fs.existsSync(g.exe) ? shell.showItemInFolder(g.exe) : shell.openPath(g.folder);
   });
   ipcMain.handle('game:refetchArt', (_e, id, opts) => queueArt(id, { ...opts, force: true }, true));
 

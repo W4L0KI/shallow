@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scanRoots, scanFolder, gameId } = require('./scanner');
+const { steamGames, epicGames } = require('./stores');
 
 const DEFAULT_SETTINGS = {
   roots: ['D:\\Games'],
@@ -10,6 +11,8 @@ const DEFAULT_SETTINGS = {
   accent: '#8b7bff',
   cardSize: 190,
   sort: 'name',
+  importSteam: true,
+  importEpic: true,
 };
 
 // Fields owned by the user: a rescan never overwrites them once set by hand.
@@ -114,8 +117,12 @@ class Library {
   }
 
   rescan() {
-    const { roots, excluded } = this.data.settings;
+    const { roots, excluded, importSteam, importEpic } = this.data.settings;
     const found = scanRoots(roots, excluded);
+    const folders = new Set(found.map((f) => f.folder.toLowerCase()));
+    const stores = [...(importSteam ? steamGames() : []), ...(importEpic ? epicGames() : [])];
+    // A store game that also sits in a scanned folder is kept once, as a local game.
+    for (const s of stores) if (!folders.has(s.folder.toLowerCase())) found.push(s);
     const seen = new Set();
     for (const f of found) {
       this._merge(f);
