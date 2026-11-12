@@ -789,7 +789,9 @@ async function init() {
   $('#cardSize').value = settings.cardSize;
   document.documentElement.style.setProperty('--card', settings.cardSize + 'px');
   bindEvents();
+  bindPalette();
   setGames(games);
 }
 
-init();
+// Wait for pages.js / palette.js, loaded after this file.
+window.addEventListener('DOMContentLoaded', init);

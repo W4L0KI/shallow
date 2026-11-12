@@ -85,8 +85,17 @@
     <div class="modal-backdrop" id="modal" hidden><div class="modal" id="modalBody"></div></div>
     <div class="toasts" id="toasts"></div>
 
+    <div class="palette-backdrop" id="palette" hidden>
+      <div class="palette">
+        <label class="palette-input"><span data-icon="search"></span><input id="paletteInput" type="text" placeholder="Lancer un jeu, ouvrir une page…" spellcheck="false" autocomplete="off" /><kbd>Échap</kbd></label>
+        <div class="palette-list" id="paletteList"></div>
+        <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> naviguer</span><span><kbd>↵</kbd> jouer</span><span><kbd>Maj</kbd><kbd>↵</kbd> afficher</span></div>
+      </div>
+    </div>
+
     <script src="icons.js"></script>
     <script src="app.js"></script>
     <script src="pages.js"></script>
+    <script src="palette.js"></script>
   </body>
 </html>
