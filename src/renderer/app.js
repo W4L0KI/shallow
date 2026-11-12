@@ -272,10 +272,12 @@ function renderHero() {
           : `<h1 class="hero-title">${esc(title(g))}</h1>`
       }
       <div class="hero-meta">${meta.join('<span style="opacity:.35">•</span>')}</div>
+      ${goalHtml(g)}
       ${g.description ? `<p class="hero-desc">${esc(g.description)}</p>` : ''}
       <div class="hero-actions">
         <button class="btn-play ${g.running ? 'running' : ''}" data-act="play">${icon(g.running ? 'gamepad' : 'play')}${g.running ? 'En cours…' : 'Jouer'}</button>
         <button class="btn-icon ${g.favorite ? 'fav-on' : ''}" data-act="fav" title="${g.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}">${icon(g.favorite ? 'heartFill' : 'heart')}</button>
+        <button class="btn-icon ${g.notes || g.goal || g.goalHours ? 'has-notes' : ''}" data-act="notes" title="Notes et objectif">${icon('note')}</button>
         <button class="btn-icon" data-act="folder" title="Ouvrir le dossier">${icon('folder')}</button>
         <button class="btn-icon" data-act="more" title="Plus d’options">${icon('more')}</button>
       </div>
@@ -291,6 +293,54 @@ function renderHero() {
   img.onerror = () => art.classList.add('on');
   img.src = bg;
   setAmbient(media(g.cover || g.hero));
+}
+
+// Goal line under the hero meta: "Objectif · Finir l'histoire  12 h / 40 h".
+function goalHtml(g) {
+  if (!g.goal && !g.goalHours) return '';
+  const hours = (g.playtime || 0) / 3600;
+  const pct = g.goalHours ? Math.min(100, (hours / g.goalHours) * 100) : 0;
+  const done = g.goalHours && hours >= g.goalHours;
+  return `<div class="hero-goal ${done ? 'done' : ''}">
+    <div class="hero-goal-line">${icon('target')}<span>${esc(g.goal || 'Objectif')}</span>
+      ${g.goalHours ? `<b>${Math.floor(hours)} h / ${g.goalHours} h</b>` : ''}</div>
+    ${g.goalHours ? `<div class="meter"><i style="width:${pct}%"></i></div>` : ''}
+  </div>`;
+}
+
+function openNotes(id) {
+  const g = state.games.get(id);
+  openModal(
+    `<div class="modal-head"><h3>Notes · ${esc(title(g))}</h3><button class="close-x" data-close>${icon('x')}</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Objectif</label>
+        <div class="row">
+          <input class="input" id="nGoal" value="${esc(g.goal || '')}" placeholder="ex : Finir l’histoire, platine, 100 %" maxlength="80">
+          <div class="hours-input"><input class="input" id="nHours" type="number" min="1" max="9999" value="${g.goalHours || ''}" placeholder="—"><span>heures</span></div>
+        </div>
+        <div class="hint">Le temps visé affiche une barre de progression dans la fiche du jeu, calculée avec ton temps de jeu (${fmtPlaytime(g.playtime) || '0 min'} pour l’instant).</div>
+      </div>
+      <div class="field" style="margin-bottom:0"><label>Notes</label>
+        <textarea class="input textarea" id="nNotes" rows="8" placeholder="Où tu en es, codes, astuces, choses à ne pas oublier…">${esc(g.notes || '')}</textarea>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn ghost" data-close>Annuler</button><button class="btn primary" id="nSave">${icon('check')}Enregistrer</button></div>`,
+    (root) => {
+      root.querySelector('#nSave').onclick = async () => {
+        const hours = Math.round(Number(root.querySelector('#nHours').value));
+        refreshGame(
+          await api.updateGame(id, {
+            goal: root.querySelector('#nGoal').value.trim() || null,
+            goalHours: hours > 0 ? hours : null,
+            notes: root.querySelector('#nNotes').value.trim() || null,
+          })
+        );
+        closeModal();
+        toast({ text: 'Notes enregistrées', game: g });
+      };
+      root.querySelector('#nNotes').focus();
+    }
+  );
 }
 
 function cardHtml(g, i) {
@@ -461,6 +511,7 @@ function openMenu(id, x, y) {
     <div class="menu-label">Statut</div>
     <div class="menu-status">${STATUSES.map((s) => `<button data-status="${s.id}" class="status-${s.id} ${g.status === s.id ? 'on' : ''}">${s.label}</button>`).join('')}</div>
     <button data-m="collections">${icon('folder')}Collections…</button>
+    <button data-m="notes">${icon('note')}Notes et objectif…</button>
     <hr>
     <button data-m="edit">${icon('edit')}Modifier…</button>
     <button data-m="folder">${icon('folder')}Ouvrir le dossier</button>
@@ -484,6 +535,7 @@ function openMenu(id, x, y) {
     ({
       play: () => launch(id),
       collections: () => openCollections(id),
+      notes: () => openNotes(id),
       stop: () => api.stop(id),
       fav: () => toggleFav(id),
       edit: () => openEdit(id),
@@ -871,6 +923,7 @@ function bindEvents() {
     if (b.dataset.act === 'play') launch(id);
     if (b.dataset.act === 'fav') toggleFav(id);
     if (b.dataset.act === 'folder') api.openFolder(id);
+    if (b.dataset.act === 'notes') openNotes(id);
     if (b.dataset.act === 'more') {
       const r = b.getBoundingClientRect();
       openMenu(id, r.left, r.bottom + 8);
