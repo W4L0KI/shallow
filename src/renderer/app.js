@@ -4,6 +4,8 @@ const state = {
   games: new Map(),
   settings: {},
   view: 'all',
+  page: null, // full-page view (see pages.js) shown instead of hero + grid
+  sessions: [],
   query: '',
   selectedId: null,
   artPending: 0,
@@ -157,9 +159,12 @@ function renderNav() {
   };
   $('#nav').innerHTML = VIEWS.filter((v) => v.id !== 'hidden' || counts.hidden)
     .map(
-      (v) => `<button class="nav-item ${state.view === v.id ? 'active' : ''}" data-view="${v.id}">
+      (v) => `<button class="nav-item ${!state.page && state.view === v.id ? 'active' : ''}" data-view="${v.id}">
         ${icon(v.icon)}<span>${v.label}</span><span class="count">${counts[v.id]}</span></button>`
     )
+    .join('');
+  $('#navActivity').innerHTML = Object.entries(PAGES)
+    .map(([id, p]) => `<button class="nav-item ${state.page === id ? 'active' : ''}" data-page="${id}">${icon(p.icon)}<span>${p.label}</span></button>`)
     .join('');
 
   const favs = all.filter((g) => g.favorite && !g.hidden).sort((a, b) => title(a).localeCompare(title(b), 'fr'));
@@ -175,9 +180,17 @@ function renderNav() {
   $('#favList').querySelectorAll('.fav-empty .ic').forEach((i) => (i.style.cssText = 'display:inline;width:13px;height:13px;vertical-align:-2px'));
 
   const total = all.reduce((s, g) => s + (g.playtime || 0), 0);
+  const twoWeeks = state.sessions.filter((s) => s.start > Date.now() - 14 * 86400000);
+  const last = state.sessions.length && state.games.get(state.sessions[state.sessions.length - 1].game);
   $('#sideStats').innerHTML = `
     <div class="stat"><b>${counts.all}</b><small>Jeux</small></div>
-    <div class="stat"><b>${total ? Math.round(total / 3600) + ' h' : '0 h'}</b><small>Jouées</small></div>`;
+    <div class="stat"><b>${total ? Math.round(total / 3600) + ' h' : '0 h'}</b><small>Jouées</small></div>
+    ${
+      twoWeeks.length
+        ? `<button class="stat wide" data-page="history"><b>${fmtPlaytime(twoWeeks.reduce((t, s) => t + s.seconds, 0))}</b>
+            <small>Ces 2 dernières semaines${last ? ` · ${esc(title(last))}` : ''}</small></button>`
+        : ''
+    }`;
 }
 
 let ambientFlip = false;
@@ -305,6 +318,7 @@ function renderAll(opts) {
   renderHero();
   renderSort();
   renderGrid(opts);
+  renderPage();
 }
 
 // Re-render only what one game affects, without replaying grid animations.
@@ -362,10 +376,30 @@ async function toggleHidden(id) {
 }
 
 function setView(view) {
+  const fromPage = !!state.page;
   state.view = view;
+  state.page = null;
   renderNav();
   renderSort();
   renderGrid();
+  renderPage();
+  if (fromPage) { lastAmbient = null; renderHero(); }
+}
+
+function openPage(page) {
+  state.page = page;
+  renderNav();
+  renderPage();
+  $('#scroll').scrollTo({ top: 0 });
+}
+
+// From a page, jump back to the library with this game in the hero.
+function showGame(id) {
+  if (!state.games.has(id)) return;
+  if (state.games.get(id).hidden) state.view = 'hidden';
+  else if (state.view === 'hidden') state.view = 'all';
+  setView(state.view);
+  select(id);
 }
 
 // ---------- context menu ----------
@@ -596,9 +630,17 @@ function bindEvents() {
     const b = e.target.closest('[data-view]');
     if (b) setView(b.dataset.view);
   };
+  document.querySelector('.sidebar').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-page]');
+    if (b) openPage(b.dataset.page);
+  });
+  $('#page').onclick = (e) => {
+    const b = e.target.closest('[data-id]');
+    if (b && !e.target.closest('[data-act]')) showGame(b.dataset.id);
+  };
   $('#favList').onclick = (e) => {
     const b = e.target.closest('[data-id]');
-    if (b) select(b.dataset.id);
+    if (b) state.page ? showGame(b.dataset.id) : select(b.dataset.id);
   };
   $('#favList').ondblclick = (e) => {
     const b = e.target.closest('[data-id]');
@@ -620,6 +662,7 @@ function bindEvents() {
   const search = $('#search');
   search.oninput = () => {
     state.query = search.value;
+    if (state.page) return setView(state.view);
     renderGrid({ animate: false });
   };
 
@@ -700,8 +743,8 @@ function bindEvents() {
       }
       return;
     }
-    if (e.key === 'Enter' && state.selectedId) return launch(state.selectedId);
-    if (/^Arrow(Left|Right|Up|Down)$/.test(e.key)) {
+    if (!state.page && e.key === 'Enter' && state.selectedId) return launch(state.selectedId);
+    if (!state.page && /^Arrow(Left|Right|Up|Down)$/.test(e.key)) {
       e.preventDefault();
       const list = visibleGames();
       if (!list.length) return;
@@ -723,8 +766,13 @@ function bindEvents() {
     $('#artProgress').hidden = pending === 0;
     $('#artProgressText').textContent = `Téléchargement des covers… ${pending}`;
   });
-  api.onSessionEnded(({ id, seconds }) => {
+  api.onSessionEnded(({ id, seconds, session }) => {
     const g = state.games.get(id);
+    if (session) {
+      state.sessions.push(session);
+      renderNav();
+      if (state.page) renderPage();
+    }
     if (g) toast({ title: 'Session terminée', text: `${title(g)} · ${fmtPlaytime(seconds) || 'moins d’une minute'}`, game: g });
   });
   api.onToast(toast);
@@ -733,8 +781,9 @@ function bindEvents() {
 
 async function init() {
   hydrateIcons();
-  const { games, settings } = await api.getLibrary();
+  const { games, settings, sessions } = await api.getLibrary();
   state.settings = settings;
+  state.sessions = sessions || [];
   applyAccent(settings.accent);
   $('#cardSize').value = settings.cardSize;
   document.documentElement.style.setProperty('--card', settings.cardSize + 'px');

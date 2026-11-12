@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('api', {
   getLibrary: () => ipcRenderer.invoke('library:get'),
   rescan: () => ipcRenderer.invoke('library:rescan'),
   updateGame: (id, patch) => ipcRenderer.invoke('game:update', id, patch),
+  updateSession: (id, patch) => ipcRenderer.invoke('session:update', id, patch),
   launch: (id) => ipcRenderer.invoke('game:launch', id),
   stop: (id) => ipcRenderer.invoke('game:stop', id),
   openFolder: (id) => ipcRenderer.invoke('game:openFolder', id),

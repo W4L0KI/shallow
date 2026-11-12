@@ -20,11 +20,12 @@ class Library {
     this.dir = dir;
     this.file = path.join(dir, 'library.json');
     this.artDir = path.join(dir, 'art');
-    this.data = { settings: { ...DEFAULT_SETTINGS }, games: {} };
+    this.data = { settings: { ...DEFAULT_SETTINGS }, games: {}, sessions: [] };
     try {
       const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       this.data.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
       this.data.games = raw.games || {};
+      this.data.sessions = raw.sessions || [];
     } catch {}
     this._saveTimer = null;
   }
@@ -61,6 +62,26 @@ class Library {
     Object.assign(g, patch);
     this.save();
     return g;
+  }
+
+  // Play sessions: { id, game, start, seconds, note? }, oldest first.
+  get sessions() {
+    return this.data.sessions;
+  }
+
+  addSession(game, start, seconds) {
+    const s = { id: `${start}-${game}`, game, start, seconds };
+    this.data.sessions.push(s);
+    this.save();
+    return s;
+  }
+
+  updateSession(id, patch) {
+    const s = this.data.sessions.find((x) => x.id === id);
+    if (!s) return null;
+    Object.assign(s, patch);
+    this.save();
+    return s;
   }
 
   updateSettings(patch) {

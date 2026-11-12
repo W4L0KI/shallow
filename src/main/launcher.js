@@ -90,7 +90,7 @@ class Launcher extends EventEmitter {
       else if (now - s.start > GRACE_MS) {
         this.sessions.delete(id);
         const seconds = Math.max(0, Math.round((s.lastSeen - s.start) / 1000));
-        this.emit('stopped', id, seconds);
+        this.emit('stopped', id, seconds, s.start);
       }
     }
     if (!this.sessions.size) {
