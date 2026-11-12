@@ -615,6 +615,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px;
 .bp::before { content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background: linear-gradient(180deg, rgba(7,8,12,.75) 0%, transparent 22%), linear-gradient(90deg, rgba(7,8,12,.85) 0%, rgba(7,8,12,.35) 50%, transparent 75%), linear-gradient(0deg, var(--bg) 8%, rgba(7,8,12,.85) 34%, transparent 62%); }
 .bp > :is(.bp-top, .bp-info, .bp-row, .bp-legend) { position: relative; z-index: 2; }
+.bp.no-cursor, .bp.no-cursor * { cursor: none !important; }
 
 .bp-top { display: flex; align-items: center; gap: 24px; padding: 28px 56px 0; }
 .bp-brand { display: flex; align-items: center; gap: 12px; font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif; font-weight: 700; font-size: 22px; }

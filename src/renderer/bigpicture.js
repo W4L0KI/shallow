@@ -160,6 +160,24 @@ function bpFocus(smooth = true) {
   if (logo) logo.onerror = () => (logo.outerHTML = `<h1>${esc(title(g))}</h1>`);
 }
 
+// The mouse pointer is hidden while you use the pad/keyboard; moving the mouse shows it for a moment.
+function bpHideCursor() {
+  clearTimeout(bp.cursorTimer);
+  $('#bp').classList.add('no-cursor');
+}
+
+function bpShowCursor(e) {
+  if (!bp.open) return;
+  // Going full screen fires mousemove without the mouse moving: only a real move shows the pointer.
+  const last = bp.mouse;
+  bp.mouse = { x: e.screenX, y: e.screenY };
+  if (!last || Math.abs(e.screenX - last.x) + Math.abs(e.screenY - last.y) < 4) return;
+  if (performance.now() < bp.ignoreMouseUntil) return; // the window is still switching to full screen
+  $('#bp').classList.remove('no-cursor');
+  clearTimeout(bp.cursorTimer);
+  bp.cursorTimer = setTimeout(bpHideCursor, 2000);
+}
+
 // Redraw one game's card (cover + "En cours" badge) from its live record.
 function bpRefreshCard(id) {
   if (!bp.open) return;
@@ -251,6 +269,8 @@ function openBigPicture() {
   bp.shelf = 0;
   bp.index = 0;
   $('#bp').hidden = false;
+  bp.ignoreMouseUntil = performance.now() + 1200;
+  bpHideCursor();
   renderBP();
   api.win.fullscreen(true);
   bp.clock = setInterval(bpClock, 15000);
@@ -260,6 +280,8 @@ function closeBigPicture() {
   if (!bp.open) return;
   bp.open = false;
   bp.launching = null;
+  clearTimeout(bp.cursorTimer);
+  $('#bp').classList.remove('no-cursor');
   $('#bp').hidden = true;
   $('#bp').innerHTML = '';
   clearInterval(bp.clock);
@@ -275,7 +297,10 @@ function pollPads() {
     const pressed = (b) => pad.buttons[b] && pad.buttons[b].pressed;
     const down = (b) => pressed(b) && !prev[b];
     bp.prevButtons[pad.index] = pad.buttons.map((b) => b.pressed);
-    if (pad.buttons.some((b, i) => b.pressed && !prev[i]) || Math.abs(pad.axes[0]) > 0.5) setPadKind(padKind(pad));
+    if (pad.buttons.some((b, i) => b.pressed && !prev[i]) || Math.abs(pad.axes[0]) > 0.5) {
+      setPadKind(padKind(pad));
+      if (bp.open) bpHideCursor();
+    }
 
     if (!bp.open) {
       if (down(PAD.START) || down(PAD.HOME)) openBigPicture();
@@ -309,6 +334,7 @@ function pollPads() {
 
 function bindBigPicture() {
   $('#btnBigPicture').onclick = openBigPicture;
+  $('#bp').addEventListener('mousemove', bpShowCursor);
   $('#bp').onclick = (e) => {
     if (bp.launching) return;
     const tab = e.target.closest('[data-shelf]');
@@ -333,6 +359,7 @@ function bindBigPicture() {
       e.preventDefault();
       e.stopPropagation();
       if (!bp.pad) setPadKind('keyboard');
+      bpHideCursor();
       if (!bp.launching) fn();
     },
     true
