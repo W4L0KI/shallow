@@ -749,7 +749,7 @@ function openSettings() {
         <div class="hint">Chaque sous-dossier est considéré comme un jeu. L’exécutable principal est détecté automatiquement.</div>
       </div>
       <div class="field"><label>Launchers</label>
-        <label class="toggle" style="margin-bottom:8px"><div><b>${icon('steam', 'inline-ic')}Importer les jeux Steam</b><small>Jeux installés dans toutes tes bibliothèques Steam, lancés via Steam.</small></div>
+        <label class="toggle"><div><b>${icon('steam', 'inline-ic')}Importer les jeux Steam</b><small>Jeux installés dans toutes tes bibliothèques Steam, lancés via Steam.</small></div>
           <span class="switch"><input type="checkbox" id="sSteam" ${s.importSteam !== false ? 'checked' : ''}><i></i></span></label>
         <label class="toggle"><div><b>${icon('epic', 'inline-ic')}Importer les jeux Epic Games</b><small>Jeux installés avec l’Epic Games Launcher, lancés via Epic.</small></div>
           <span class="switch"><input type="checkbox" id="sEpic" ${s.importEpic !== false ? 'checked' : ''}><i></i></span></label>
@@ -766,10 +766,10 @@ function openSettings() {
       </div>
       <div class="field"><label>Images</label>
         <button class="btn small" id="sRefetch">${icon('steam')}Re-télécharger toutes les covers</button>
-        <div class="hint">Les covers, fonds et logos viennent de Steam (Wikipedia en secours). Tes images personnalisées sont remplacées.</div>
+        <div class="hint">Les covers, fonds et logos viennent de Steam et du launcher Epic (Wikipédia en secours). Tes images personnalisées sont remplacées.</div>
       </div>
     </div>
-    <div class="modal-foot"><button class="btn primary" data-close>Terminé</button></div>`,
+    <div class="modal-foot"><span class="app-version">Shallow ${esc(state.version || '')}</span><button class="btn primary" data-close>Terminé</button></div>`,
     (root) => {
       const save = async (patch) => {
         state.settings = await api.updateSettings(patch);
@@ -1036,7 +1036,8 @@ function bindEvents() {
 
 async function init() {
   hydrateIcons();
-  const { games, settings, sessions } = await api.getLibrary();
+  const { games, settings, sessions, version } = await api.getLibrary();
+  state.version = version;
   state.settings = settings;
   state.sessions = sessions || [];
   applyAccent(settings.accent);

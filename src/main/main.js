@@ -166,7 +166,7 @@ const brokenReported = new Set();
 // --- IPC ------------------------------------------------------------------
 
 function registerIpc() {
-  ipcMain.handle('library:get', () => ({ games: allGames(), settings: library.settings, sessions: library.sessions }));
+  ipcMain.handle('library:get', () => ({ games: allGames(), settings: library.settings, sessions: library.sessions, version: app.getVersion() }));
   ipcMain.handle('session:update', (_e, id, patch) => library.updateSession(id, patch));
   ipcMain.handle('library:rescan', () => rescan());
   ipcMain.handle('game:update', (_e, id, patch) => decorate(library.update(id, patch)));
