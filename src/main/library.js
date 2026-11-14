@@ -26,14 +26,44 @@ class Library {
     this.file = path.join(dir, 'library.json');
     this.artDir = path.join(dir, 'art');
     this.data = { settings: { ...DEFAULT_SETTINGS }, games: {}, sessions: [] };
+    this.restoredFrom = null;
+    let raw = null;
     try {
-      const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+      raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+    } catch {}
+    // library.json older than a backup (it was replaced by an old copy) or unreadable: use the newest backup.
+    const backup = this._newestBackup();
+    if (backup && (!raw || (backup.data.savedAt || 0) > (raw.savedAt || 0))) {
+      try {
+        if (raw) fs.copyFileSync(this.file, path.join(this.dir, 'backups', `library-remplace-${Date.now()}.json`));
+      } catch {}
+      raw = backup.data;
+      this.restoredFrom = backup.name;
+    }
+    if (raw) {
       this.data.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
       this.data.games = raw.games || {};
       this.data.sessions = raw.sessions || [];
+      this.data.savedAt = raw.savedAt;
+      if (this.restoredFrom) this.saveNow();
       this._dailyBackup();
-    } catch {}
+    }
     this._saveTimer = null;
+  }
+
+  // The daily backup saved most recently (by the date stored inside it), or null.
+  _newestBackup() {
+    const dir = path.join(this.dir, 'backups');
+    let best = null;
+    try {
+      for (const name of fs.readdirSync(dir).filter((f) => /^library-\d{4}-\d{2}-\d{2}\.json$/.test(f))) {
+        try {
+          const data = JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+          if (data.savedAt && (!best || data.savedAt > best.data.savedAt)) best = { name, data };
+        } catch {}
+      }
+    } catch {}
+    return best;
   }
 
   // One copy of library.json per day in backups/, the 7 most recent are kept.
@@ -58,6 +88,7 @@ class Library {
     clearTimeout(this._saveTimer);
     fs.mkdirSync(this.dir, { recursive: true });
     const tmp = this.file + '.tmp';
+    this.data.savedAt = Date.now(); // lets the next start detect a library.json replaced by an older copy
     fs.writeFileSync(tmp, JSON.stringify(this.data, null, 2));
     fs.renameSync(tmp, this.file);
   }

@@ -295,6 +295,8 @@ app.whenReady().then(() => {
   registerIpc();
   createWindow();
   win.webContents.once('did-finish-load', async () => {
+    if (library.restoredFrom)
+      send('toast', { title: 'Bibliothèque restaurée', text: 'Ton fichier de données était revenu à une ancienne version : la copie de secours la plus récente a été remise.' });
     send('library:changed', await rescan());
   });
 });
