@@ -71,7 +71,8 @@ class Library {
     try {
       const dir = path.join(this.dir, 'backups');
       fs.mkdirSync(dir, { recursive: true });
-      const day = new Date().toISOString().slice(0, 10);
+      const now = new Date(); // local date: a new backup each calendar day for the user, not each UTC day
+      const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const dest = path.join(dir, `library-${day}.json`);
       if (!fs.existsSync(dest)) fs.copyFileSync(this.file, dest);
       const old = fs.readdirSync(dir).filter((f) => /^library-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort().slice(0, -7);
