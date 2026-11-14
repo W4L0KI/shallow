@@ -184,7 +184,8 @@ function epicInfo(name, { itemId, namespace } = {}) {
     // The cache stores "®" as a literal "?": an installed game keeps its manifest name instead.
     steamName: itemId && it.id === itemId ? undefined : it.title.replace(/[™®©�]|\?$/g, '').trim(),
     partialMatch: false,
-    description: it.description || '',
+    // Some catalog entries only repeat the title here ("Rocket League?"): not a description.
+    description: it.description && similarity(it.description, it.title) < 0.8 ? it.description : '',
     developer: it.developer || '',
     urls: { cover: img('DieselGameBoxTall', 'w=600&h=800'), hero: img('DieselGameBox', 'w=1920&h=1080'), logo: img('DieselGameBoxLogo') },
   };

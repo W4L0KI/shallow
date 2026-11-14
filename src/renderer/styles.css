@@ -296,6 +296,14 @@ img { -webkit-user-drag: none; }
 .filter-select.on { color: var(--text); border-color: rgba(var(--accent-rgb), .5); background-color: rgba(var(--accent-rgb), .1); }
 .filter-select option { background: #161824; color: var(--text); }
 
+/* Source buttons: their own row under the title, wrapping if there are many launchers */
+.lib-sources { flex-basis: 100%; display: flex; }
+.source-seg { max-width: 100%; flex-wrap: wrap; }
+.source-seg button { display: inline-flex; align-items: center; gap: 7px; }
+.source-seg .ic { width: 15px; height: 15px; opacity: .8; }
+.seg-count { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.source-seg button.active .seg-count { color: var(--text-2); }
+
 .size-slider { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 .size-slider .ic { width: 15px; height: 15px; }
 input[type=range] { -webkit-appearance: none; appearance: none; width: 96px; height: 4px; border-radius: 4px; background: var(--surface-3); outline: none; }

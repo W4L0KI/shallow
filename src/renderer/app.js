@@ -275,7 +275,7 @@ function renderHero() {
       }
       <div class="hero-meta">${meta.join('<span style="opacity:.35">•</span>')}</div>
       ${goalHtml(g)}
-      ${g.description ? `<p class="hero-desc">${esc(g.description)}</p>` : ''}
+      ${g.description && norm(g.description).replace(/\W/g, '') !== norm(title(g)).replace(/\W/g, '') ? `<p class="hero-desc">${esc(g.description)}</p>` : ''}
       <div class="hero-actions">
         <button class="btn-play ${g.running ? 'running' : ''}" data-act="play">${icon(g.running ? 'gamepad' : 'play')}${g.running ? 'En cours…' : 'Jouer'}</button>
         <button class="btn-icon ${g.favorite ? 'fav-on' : ''}" data-act="fav" title="${g.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris'}">${icon(g.favorite ? 'heartFill' : 'heart')}</button>
@@ -402,12 +402,17 @@ function renderSort() {
     .join('');
   $('#statusFilter').classList.toggle('on', !!state.status);
 
-  const present = new Set([...state.games.values()].map((g) => g.source || 'local'));
-  $('#sourceFilter').hidden = present.size < 2;
-  $('#sourceFilter').innerHTML = [['', 'Toutes les sources'], ...sources().filter(([id]) => present.has(id))]
-    .map(([id, l]) => `<option value="${id}" ${state.source === id ? 'selected' : ''}>${l}</option>`)
+  // One button per source that has games: a click instead of opening a list.
+  const count = {};
+  for (const g of state.games.values()) if (!g.hidden) count[g.source || 'local'] = (count[g.source || 'local'] || 0) + 1;
+  const present = sources().filter(([id]) => count[id]);
+  $('.lib-sources').hidden = present.length < 2;
+  $('#sourceSeg').innerHTML = [['', 'Tout'], ...present]
+    .map(
+      ([id, l]) => `<button data-source="${id}" class="${state.source === id ? 'active' : ''}">${id ? icon(id === 'local' ? 'folder' : sourceIcon(id)) : ''}
+        ${l}<span class="seg-count">${id ? count[id] : Object.values(count).reduce((a, b) => a + b, 0)}</span></button>`
+    )
     .join('');
-  $('#sourceFilter').classList.toggle('on', !!state.source);
 }
 
 function renderAll(opts) {
@@ -860,8 +865,10 @@ function bindEvents() {
     renderSort();
     renderGrid();
   };
-  $('#sourceFilter').onchange = (e) => {
-    state.source = e.target.value;
+  $('#sourceSeg').onclick = (e) => {
+    const b = e.target.closest('[data-source]');
+    if (!b || b.dataset.source === state.source) return;
+    state.source = b.dataset.source;
     renderSort();
     renderGrid();
   };

@@ -69,7 +69,6 @@
               <h2 id="libTitle">Bibliothèque</h2>
               <span class="lib-count" id="libCount"></span>
               <div class="lib-tools">
-                <select class="filter-select" id="sourceFilter" title="Filtrer par source" hidden></select>
                 <select class="filter-select" id="statusFilter" title="Filtrer par statut"></select>
                 <div class="segmented" id="sortSeg"></div>
                 <label class="size-slider" title="Taille des covers">
@@ -77,6 +76,7 @@
                   <input type="range" id="cardSize" min="140" max="280" step="10" />
                 </label>
               </div>
+              <div class="lib-sources" hidden><div class="segmented source-seg" id="sourceSeg"></div></div>
             </div>
             <div class="grid" id="grid"></div>
             <div class="empty" id="empty" hidden></div>
