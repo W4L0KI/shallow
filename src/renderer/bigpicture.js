@@ -297,6 +297,13 @@ function pollPads() {
     const pressed = (b) => pad.buttons[b] && pad.buttons[b].pressed;
     const down = (b) => pressed(b) && !prev[b];
     bp.prevButtons[pad.index] = pad.buttons.map((b) => b.pressed);
+    // The pad is read even when another window is in front: while you play, Shallow (still open
+    // behind the game) must not react, or it would navigate and launch games on its own.
+    // Button states are still tracked above, so a button held when Shallow comes back is ignored.
+    if (!document.hasFocus()) {
+      bp.held[`${pad.index}`] = { x: 0, y: 0, next: 0, sync: true };
+      continue;
+    }
     if (pad.buttons.some((b, i) => b.pressed && !prev[i]) || Math.abs(pad.axes[0]) > 0.5) {
       setPadKind(padKind(pad));
       if (bp.open) bpHideCursor();
@@ -318,7 +325,10 @@ function pollPads() {
     const y = pressed(PAD.UP) ? -1 : pressed(PAD.DOWN) ? 1 : Math.abs(pad.axes[1]) > 0.6 ? Math.sign(pad.axes[1]) : 0;
     const key = `${pad.index}`;
     const h = bp.held[key] || (bp.held[key] = { x: 0, y: 0, next: 0 });
-    if (x !== h.x || y !== h.y) {
+    if (h.sync) {
+      // Back from another window: adopt the stick/d-pad position without moving.
+      Object.assign(h, { x, y, next: now + 380, sync: false });
+    } else if (x !== h.x || y !== h.y) {
       h.x = x; h.y = y;
       if (bp.launching) continue;
       if (x) bpMove(x);
