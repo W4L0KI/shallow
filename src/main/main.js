@@ -2,7 +2,8 @@ const { app, BrowserWindow, ipcMain, dialog, shell, protocol, net, screen } = re
 const path = require('path');
 const fs = require('fs');
 const { pathToFileURL } = require('url');
-const { Library } = require('./library');
+const { Library, importKey } = require('./library');
+const { STORES, refreshInstalledPrograms } = require('./stores');
 const { Launcher } = require('./launcher');
 const { fetchArt, steamSearch } = require('./metadata');
 
@@ -106,6 +107,8 @@ function pumpArt() {
     let opts = queued;
     if (!opts.appid && g.source === 'steam') opts = { ...opts, appid: Number(g.id.slice(6)) || g.steamAppId, steamName: g.name };
     if (g.source === 'epic') opts = { ...opts, epicNamespace: g.epicNamespace, epicItemId: g.epicItemId };
+    // Other launchers give the exact title: only accept a close Steam match. Riot games aren't on Steam at all.
+    if (g.source && !['local', 'steam', 'epic'].includes(g.source)) opts = { ...opts, strict: true, skipSteam: g.source === 'riot' };
     artActive++;
     send('art:progress', { id, pending: artQueue.length + artActive });
     library.update(id, { artTriedAt: Date.now() });
@@ -152,7 +155,9 @@ function needsArt(g, sourcesChanged) {
   return incomplete && !(g.custom && g.custom.cover && g.custom.hero) && (sourcesChanged || Date.now() - (g.artTriedAt || 0) > ART_RETRY_MS);
 }
 
-function rescan() {
+// Reads the installed-programs list (slow) off the main thread first, then scans.
+async function rescan() {
+  await refreshInstalledPrograms();
   library.rescan();
   const sourcesChanged = library.settings.artVersion !== ART_VERSION;
   for (const g of library.list()) if (needsArt(g, sourcesChanged)) queueArt(g.id);
@@ -166,7 +171,13 @@ const brokenReported = new Set();
 // --- IPC ------------------------------------------------------------------
 
 function registerIpc() {
-  ipcMain.handle('library:get', () => ({ games: allGames(), settings: library.settings, sessions: library.sessions, version: app.getVersion() }));
+  ipcMain.handle('library:get', () => ({
+    games: allGames(),
+    settings: library.settings,
+    sessions: library.sessions,
+    version: app.getVersion(),
+    stores: STORES.map(({ id, label }) => ({ id, label, setting: importKey(id) })),
+  }));
   ipcMain.handle('session:update', (_e, id, patch) => library.updateSession(id, patch));
   ipcMain.handle('library:rescan', () => rescan());
   ipcMain.handle('game:update', (_e, id, patch) => decorate(library.update(id, patch)));
@@ -174,8 +185,9 @@ function registerIpc() {
   ipcMain.handle('game:launch', (_e, id, opts = {}) => {
     const g = library.get(id);
     if (!g) return { ok: false, error: 'Jeu introuvable' };
-    const viaStore = g.launchUri && !(g.custom && g.custom.exe);
-    if (!viaStore && !fs.existsSync(g.exe)) return { ok: false, error: `Exécutable introuvable :\n${g.exe}` };
+    const viaLauncher = !(g.custom && g.custom.exe);
+    const target = viaLauncher && g.launchUri ? null : viaLauncher && g.launchExe ? g.launchExe : g.exe;
+    if (target !== null && !fs.existsSync(target)) return { ok: false, error: `Exécutable introuvable :\n${target}` };
     const res = launcher.launch(g);
     library.update(id, { lastPlayed: Date.now() });
     // In mode manette the full-screen window stays behind the game, like a console home screen:
@@ -282,9 +294,8 @@ app.whenReady().then(() => {
 
   registerIpc();
   createWindow();
-  win.webContents.once('did-finish-load', () => {
-    const games = rescan();
-    send('library:changed', games);
+  win.webContents.once('did-finish-load', async () => {
+    send('library:changed', await rescan());
   });
 });
 

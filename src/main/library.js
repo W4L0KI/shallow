@@ -2,7 +2,10 @@
 const fs = require('fs');
 const path = require('path');
 const { scanRoots, scanFolder, gameId } = require('./scanner');
-const { steamGames, epicGames } = require('./stores');
+const { STORES } = require('./stores');
+
+// Setting that turns a launcher's import on/off: importSteam, importEpic, importEa, importUbisoft…
+const importKey = (store) => 'import' + store[0].toUpperCase() + store.slice(1);
 
 const DEFAULT_SETTINGS = {
   roots: ['D:\\Games'],
@@ -11,8 +14,7 @@ const DEFAULT_SETTINGS = {
   accent: '#8b7bff',
   cardSize: 190,
   sort: 'name',
-  importSteam: true,
-  importEpic: true,
+  ...Object.fromEntries(STORES.map((s) => [importKey(s.id), true])),
 };
 
 // Fields owned by the user: a rescan never overwrites them once set by hand.
@@ -131,18 +133,29 @@ class Library {
   }
 
   rescan() {
-    const { roots, excluded, importSteam, importEpic } = this.data.settings;
+    const { roots, excluded } = this.data.settings;
+    const importOn = Object.fromEntries(STORES.map((s) => [s.id, this.data.settings[importKey(s.id)] !== false]));
     const found = scanRoots(roots, excluded);
     const folders = new Set(found.map((f) => f.folder.toLowerCase()));
-    const stores = [...(importSteam ? steamGames() : []), ...(importEpic ? epicGames() : [])];
-    // A store game that also sits in a scanned folder is kept once, as a local game.
-    for (const s of stores) if (!folders.has(s.folder.toLowerCase())) found.push(s);
+    // A game seen twice (scanned folder, or two launchers sharing a folder) is kept once: local first,
+    // then launchers in STORES order.
+    for (const store of STORES) {
+      if (!importOn[store.id]) continue;
+      let games = [];
+      try {
+        games = store.scan();
+      } catch {}
+      for (const s of games) {
+        if (folders.has(s.folder.toLowerCase())) continue;
+        folders.add(s.folder.toLowerCase());
+        found.push(s);
+      }
+    }
     const seen = new Set();
     for (const f of found) {
       this._merge(f);
       seen.add(f.id);
     }
-    const importOn = { steam: importSteam, epic: importEpic };
     for (const g of this.list()) {
       // A store game being updated or verified drops out of its launcher's list for a while:
       // keep it (with its favourites, status, notes…) as long as its folder is still there.
@@ -168,4 +181,4 @@ class Library {
   }
 }
 
-module.exports = { Library };
+module.exports = { Library, importKey };

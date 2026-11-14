@@ -6,8 +6,9 @@ const { listExes } = require('./scanner');
 
 const POLL_MS = 5000;
 const GRACE_MS = 60000; // launchers/UAC prompts can take a while before the game shows up
-const STORE_GRACE_MS = 180000; // Steam/Epic may update or sync saves before starting the game
-const GENERIC = /^(launcher|unins\d*|unitycrashhandler(32|64)?|crashhandler|crs-.*|qtwebengineprocess|steam|cefprocess|.*setup|.*redist.*)\.exe$/i;
+const STORE_GRACE_MS = 180000; // launchers may log in, update or sync saves before starting the game
+// Helpers that keep running outside the game itself: they must not count as "playing".
+const GENERIC = /^(launcher|unins\d*|unitycrashhandler(32|64)?|crashhandler|crs-.*|qtwebengineprocess|steam|cefprocess|.*setup|.*redist.*|riotclient\w*|upc|ubisoftconnect|eadesktop|ealauncher|battle\.net|easyanticheat\w*|eaanticheat\w*|vgc)\.exe$/i;
 
 function parseArgs(str) {
   const out = [];
@@ -48,22 +49,32 @@ class Launcher extends EventEmitter {
 
   launch(game) {
     if (this.sessions.has(game.id)) return { ok: true, already: true };
-    // Store games go through their launcher (Steam/Epic handle updates, DRM and overlays).
-    if (game.launchUri && !(game.custom && game.custom.exe)) return this._track(game, this._openUri(game.launchUri), STORE_GRACE_MS);
-    const cwd = path.dirname(game.exe);
-    const args = parseArgs(game.args);
+    // Store games go through their launcher (it handles login, updates, DRM and overlays),
+    // unless the user picked an exe by hand.
+    const viaLauncher = !(game.custom && game.custom.exe);
+    const fromStore = game.source && game.source !== 'local';
+    if (viaLauncher && game.launchUri) return this._track(game, this._openUri(game.launchUri), STORE_GRACE_MS);
+    if (viaLauncher && game.launchExe) {
+      // e.g. Riot: RiotClientServices.exe --launch-product=valorant --launch-patchline=live
+      this._spawn(game.id, game.launchExe, parseArgs(game.launchArgs), path.dirname(game.launchExe));
+      return this._track(game, { ok: true }, STORE_GRACE_MS);
+    }
+    this._spawn(game.id, game.exe, parseArgs(game.args), path.dirname(game.exe));
+    return this._track(game, { ok: true }, fromStore ? STORE_GRACE_MS : GRACE_MS);
+  }
+
+  _spawn(id, exe, args, cwd) {
     try {
-      const child = spawn(game.exe, args, { cwd, detached: true, stdio: 'ignore', windowsHide: false });
+      const child = spawn(exe, args, { cwd, detached: true, stdio: 'ignore', windowsHide: false });
       child.on('error', (err) => {
         // Elevation required (or similar): let the shell handle it, which shows the UAC prompt.
-        if (err.code === 'EACCES' || err.errno === -4048 || /740/.test(String(err.message))) this._shellStart(game.exe, args, cwd);
-        else this.emit('error', game.id, err.message);
+        if (err.code === 'EACCES' || err.errno === -4048 || /740/.test(String(err.message))) this._shellStart(exe, args, cwd);
+        else this.emit('error', id, err.message);
       });
       child.unref();
     } catch (err) {
-      this._shellStart(game.exe, args, cwd);
+      this._shellStart(exe, args, cwd);
     }
-    return this._track(game, { ok: true }, GRACE_MS);
   }
 
   _track(game, res, grace) {
@@ -77,8 +88,10 @@ class Launcher extends EventEmitter {
   }
 
   _openUri(uri) {
+    // Xbox/Microsoft Store apps: shell:AppsFolder\<family>!<app> only opens through Explorer.
+    if (uri.startsWith('shell:')) spawn('explorer.exe', [uri], { detached: true, stdio: 'ignore' }).unref();
     // No cmd.exe here: it would mangle the "%3A" and "&" of Epic URIs.
-    spawn('rundll32.exe', ['url.dll,FileProtocolHandler', uri], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+    else spawn('rundll32.exe', ['url.dll,FileProtocolHandler', uri], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
     return { ok: true };
   }
 

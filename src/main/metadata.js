@@ -110,11 +110,13 @@ async function firstWithArt(ranked) {
   return null;
 }
 
-// Best Steam match for a local game name, or null.
-async function findSteamApp(name) {
+// Best Steam match for a local game name, or null. `strict` (games from other launchers, whose
+// exact name we know) refuses loose matches like "League of Legends" -> "…: A League of Legends Story".
+async function findSteamApp(name, { strict = false } = {}) {
   const refs = [name, expandAliases(name)];
-  const found = await firstWithArt(await rankSteam(name, searchTerms(name), refs));
-  if (found) return found;
+  const ranked = await rankSteam(name, searchTerms(name), refs);
+  const found = await firstWithArt(strict ? ranked.filter((r) => r.score >= 0.75) : ranked);
+  if (found || strict) return found;
   // Last resort (e.g. a DLC-named folder): drop trailing words and look for the base game.
   const words = name.split(/\s+/);
   for (let n = words.length - 1; n >= 2; n--) {
@@ -210,7 +212,7 @@ async function download(url, dest) {
 }
 
 // Downloads art for a game into dir; returns the fields to merge into the game record.
-async function fetchArt(name, id, dir, { appid, steamName, epicNamespace, epicItemId } = {}) {
+async function fetchArt(name, id, dir, { appid, steamName, epicNamespace, epicItemId, strict = false, skipSteam = false } = {}) {
   let info = null;
   let source = 'epic';
   // Installed Epic games: the launcher's catalog has their exact art.
@@ -222,7 +224,7 @@ async function fetchArt(name, id, dir, { appid, steamName, epicNamespace, epicIt
       if (item && similarity(name, item.name) >= 0.8) info.urls.logo = steamInfo(item).urls.logo;
     } catch {}
   }
-  if (!info) {
+  if (!info && !skipSteam) {
     source = 'steam';
     try {
       if (appid) {
@@ -230,7 +232,7 @@ async function fetchArt(name, id, dir, { appid, steamName, epicNamespace, epicIt
         if (item && item.assets && item.assets.library_capsule) info = steamInfo({ ...item, name: steamName || item.name });
       }
       if (!info) {
-        const item = await findSteamApp(appid ? baseGameName(steamName || name) : name);
+        const item = await findSteamApp(appid ? baseGameName(steamName || name) : name, { strict });
         if (item) info = { ...steamInfo(item), ...(appid ? { steamName: steamName || name, steamAppId: appid } : {}) };
       }
     } catch {}

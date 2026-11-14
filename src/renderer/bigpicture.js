@@ -53,8 +53,7 @@ function bpShelves() {
     { label: 'Favoris', games: games.filter((g) => g.favorite).sort(byName) },
     { label: 'Récents', games: games.filter((g) => g.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed) },
     { label: 'Mes jeux', games: from('local') },
-    { label: 'Steam', games: from('steam') },
-    { label: 'Epic Games', games: from('epic') },
+    ...(state.stores || []).map((s) => ({ label: s.label, games: from(s.id) })),
     ...allCollections().map((c) => ({ label: c, games: games.filter((g) => (g.collections || []).includes(c)).sort(byName) })),
     { label: 'Tous les jeux', games: [...games].sort(byName) },
   ];

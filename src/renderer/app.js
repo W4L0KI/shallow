@@ -27,7 +27,10 @@ const STATUSES = [
   { id: 'finished', label: 'Terminé' },
   { id: 'abandoned', label: 'Abandonné' },
 ];
-const SOURCES = [['local', 'Mes dossiers'], ['steam', 'Steam'], ['epic', 'Epic Games']];
+// [id, label] of every game source: your folders, then each launcher (list sent by the main process).
+const sources = () => [['local', 'Mes dossiers'], ...(state.stores || []).map((s) => [s.id, s.label])];
+const sourceLabel = (id) => (sources().find(([s]) => s === id) || [])[1];
+const sourceIcon = (id) => (ICONS[id] ? id : 'gamepad');
 
 const statusLabel = (id) => (STATUSES.find((s) => s.id === id) || {}).label;
 
@@ -250,8 +253,7 @@ function renderHero() {
   state.selectedId = g.id;
   const bg = media(g.hero || g.cover);
   const meta = [
-    g.source === 'steam' && `<span>${icon('steam')}Steam</span>`,
-    g.source === 'epic' && `<span>${icon('epic')}Epic Games</span>`,
+    g.source && g.source !== 'local' && `<span>${icon(sourceIcon(g.source))}${esc(sourceLabel(g.source) || g.source)}</span>`,
     g.developer && `<span>${esc(g.developer.split(',')[0])}</span>`,
     g.year && `<span>${g.year}</span>`,
     `<span>${icon('clock')}${fmtPlaytime(g.playtime) || 'Jamais joué'}</span>`,
@@ -400,9 +402,9 @@ function renderSort() {
     .join('');
   $('#statusFilter').classList.toggle('on', !!state.status);
 
-  const sources = new Set([...state.games.values()].map((g) => g.source || 'local'));
-  $('#sourceFilter').hidden = sources.size < 2;
-  $('#sourceFilter').innerHTML = [['', 'Toutes les sources'], ...SOURCES.filter(([id]) => sources.has(id))]
+  const present = new Set([...state.games.values()].map((g) => g.source || 'local'));
+  $('#sourceFilter').hidden = present.size < 2;
+  $('#sourceFilter').innerHTML = [['', 'Toutes les sources'], ...sources().filter(([id]) => present.has(id))]
     .map(([id, l]) => `<option value="${id}" ${state.source === id ? 'selected' : ''}>${l}</option>`)
     .join('');
   $('#sourceFilter').classList.toggle('on', !!state.source);
@@ -749,10 +751,14 @@ function openSettings() {
         <div class="hint">Chaque sous-dossier est considéré comme un jeu. L’exécutable principal est détecté automatiquement.</div>
       </div>
       <div class="field"><label>Launchers</label>
-        <label class="toggle"><div><b>${icon('steam', 'inline-ic')}Importer les jeux Steam</b><small>Jeux installés dans toutes tes bibliothèques Steam, lancés via Steam.</small></div>
-          <span class="switch"><input type="checkbox" id="sSteam" ${s.importSteam !== false ? 'checked' : ''}><i></i></span></label>
-        <label class="toggle"><div><b>${icon('epic', 'inline-ic')}Importer les jeux Epic Games</b><small>Jeux installés avec l’Epic Games Launcher, lancés via Epic.</small></div>
-          <span class="switch"><input type="checkbox" id="sEpic" ${s.importEpic !== false ? 'checked' : ''}><i></i></span></label>
+        <div class="toggle-grid">${(state.stores || [])
+          .map((st) => {
+            const n = [...state.games.values()].filter((g) => g.source === st.id).length;
+            return `<label class="toggle"><div><b>${icon(sourceIcon(st.id), 'inline-ic')}${esc(st.label)}</b><small>${n ? `${n} jeu${n > 1 ? 'x' : ''} importé${n > 1 ? 's' : ''}` : 'Aucun jeu détecté'}</small></div>
+              <span class="switch"><input type="checkbox" data-store="${st.setting}" ${s[st.setting] !== false ? 'checked' : ''}><i></i></span></label>`;
+          })
+          .join('')}</div>
+        <div class="hint">Les jeux installés avec ces launchers sont ajoutés automatiquement et se lancent via leur launcher.</div>
       </div>
       <div class="field"><label>Dossiers ignorés</label>
         <input class="input" id="sExcluded" value="${esc(s.excluded.join(', '))}" placeholder="Séparés par des virgules">
@@ -799,8 +805,7 @@ function openSettings() {
         setGames(await api.rescan());
         toast({ text: `${state.games.size} jeux dans la bibliothèque` });
       };
-      root.querySelector('#sSteam').onchange = storeToggle('importSteam');
-      root.querySelector('#sEpic').onchange = storeToggle('importEpic');
+      root.querySelectorAll('[data-store]').forEach((input) => (input.onchange = storeToggle(input.dataset.store)));
       root.querySelectorAll('[data-accent]').forEach((b) =>
         (b.onclick = async () => {
           await save({ accent: b.dataset.accent });
@@ -1036,8 +1041,9 @@ function bindEvents() {
 
 async function init() {
   hydrateIcons();
-  const { games, settings, sessions, version } = await api.getLibrary();
+  const { games, settings, sessions, version, stores } = await api.getLibrary();
   state.version = version;
+  state.stores = stores || [];
   state.settings = settings;
   state.sessions = sessions || [];
   applyAccent(settings.accent);
