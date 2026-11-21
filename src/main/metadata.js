@@ -191,6 +191,36 @@ function epicInfo(name, { itemId, namespace } = {}) {
   };
 }
 
+// --- Riot Games: the Riot Client's own theme for each game (library card, background, logo) on Riot's CDN ---
+
+async function riotInfo(product) {
+  const base = `https://${product}.secure.dyn.riotcdn.net/channels/public/rccontent/theme/`;
+  const m = await getJson(base + 'manifest.json', 1);
+  const lib = m.game_library || {};
+  const u = (f) => (f ? [base + f] : []);
+  return {
+    description: '',
+    landscapeCover: true, // the library card is 3:2, logo on the left and characters on the right
+    urls: {
+      cover: u(lib.game_card_image || lib.product_card_image),
+      hero: u((m.product_details || {}).background_image || m.product_image),
+      logo: u(m.logo_image),
+    },
+  };
+}
+
+// Landscape art -> 3:4 portrait cover, keeping the right side (where Riot puts the characters).
+function cropPortrait(file) {
+  try {
+    const { nativeImage } = require('electron');
+    const img = nativeImage.createFromPath(file);
+    const { width, height } = img.getSize();
+    const w = Math.round((height * 3) / 4);
+    if (!width || w >= width) return;
+    fs.writeFileSync(file, img.crop({ x: width - w, y: 0, width: w, height }).toJPEG(92));
+  } catch {}
+}
+
 async function wikipediaCover(name) {
   const url =
     'https://en.wikipedia.org/w/api.php?action=query&format=json&generator=search&gsrlimit=1' +
@@ -205,19 +235,34 @@ async function wikipediaCover(name) {
 // "BOMBANANA! Demo" -> "BOMBANANA!": demos and playtests often have no store art of their own.
 const baseGameName = (name) => name.replace(/\s*[-–:(]?\s*\b(demo|playtest|prologue|beta|trial)\b\)?.*$/i, '').trim();
 
+const looksLikeImage = (b) =>
+  (b[0] === 0xff && b[1] === 0xd8) || // JPEG
+  b.subarray(0, 4).toString('hex') === '89504e47' || // PNG
+  (b.subarray(0, 4).toString() === 'RIFF' && b.subarray(8, 12).toString() === 'WEBP');
+
 async function download(url, dest) {
   const res = await fetch(url, { headers: { 'User-Agent': UA } });
-  if (!res.ok || !/^image\//.test(res.headers.get('content-type') || '')) return false;
-  fs.writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
+  if (!res.ok) return false;
+  const buf = Buffer.from(await res.arrayBuffer());
+  // Some CDNs (Riot) send images as "binary/octet-stream": trust the bytes, not just the header.
+  if (!/^image\//.test(res.headers.get('content-type') || '') && !looksLikeImage(buf)) return false;
+  fs.writeFileSync(dest, buf);
   return true;
 }
 
 // Downloads art for a game into dir; returns the fields to merge into the game record.
-async function fetchArt(name, id, dir, { appid, steamName, epicNamespace, epicItemId, strict = false, skipSteam = false } = {}) {
+async function fetchArt(name, id, dir, { appid, steamName, epicNamespace, epicItemId, riotProduct, strict = false, skipSteam = false } = {}) {
   let info = null;
   let source = 'epic';
   // Installed Epic games: the launcher's catalog has their exact art.
   if (epicNamespace || epicItemId) info = epicInfo(name, { itemId: epicItemId, namespace: epicNamespace });
+  // Riot games: the official art the Riot Client shows in its library.
+  if (!info && riotProduct) {
+    source = 'riot';
+    try {
+      info = await riotInfo(riotProduct);
+    } catch {}
+  }
   // Epic's catalog rarely has a transparent logo: borrow Steam's when it is clearly the same game.
   if (info && !info.urls.logo.length) {
     try {
@@ -258,12 +303,13 @@ async function fetchArt(name, id, dir, { appid, steamName, epicNamespace, epicIt
   // Each kind has candidates in order of preference; keep the first one that downloads.
   const first = async (urls, kind, ext) => {
     for (const u of (urls || []).filter(Boolean)) {
-      const p = file(kind, ext);
+      const p = file(kind, /\.svg(\?|$)/i.test(u) ? 'svg' : ext);
       if (await download(u, p).catch(() => false)) return p;
     }
     return undefined;
   };
   out.cover = await first(info.urls.cover, 'cover', 'jpg');
+  if (out.cover && info.landscapeCover) cropPortrait(out.cover);
   out.hero = await first(info.urls.hero, 'hero', 'jpg');
   out.logo = await first(info.urls.logo, 'logo', 'png');
   for (const k of ['cover', 'hero', 'logo']) if (!out[k]) delete out[k];

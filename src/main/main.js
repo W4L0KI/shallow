@@ -109,6 +109,7 @@ function pumpArt() {
     if (g.source === 'epic') opts = { ...opts, epicNamespace: g.epicNamespace, epicItemId: g.epicItemId };
     // Other launchers give the exact title: only accept a close Steam match. Riot games aren't on Steam at all.
     if (g.source && !['local', 'steam', 'epic'].includes(g.source)) opts = { ...opts, strict: true, skipSteam: g.source === 'riot' };
+    if (g.source === 'riot') opts = { ...opts, riotProduct: ((g.launchArgs || '').match(/--launch-product=(\S+)/) || [])[1] };
     artActive++;
     send('art:progress', { id, pending: artQueue.length + artActive });
     library.update(id, { artTriedAt: Date.now() });
@@ -143,7 +144,7 @@ function allGames() {
 
 const ART_RETRY_MS = 6 * 3600 * 1000;
 // Bump when image sources improve: games still missing art are retried right away.
-const ART_VERSION = 2;
+const ART_VERSION = 3;
 
 // Images to (re)download: never fetched, a file vanished from disk, or something is still missing
 // (retried every few hours, sources get new art and the network may have failed).
