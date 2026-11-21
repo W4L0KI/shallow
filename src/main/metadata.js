@@ -191,6 +191,29 @@ function epicInfo(name, { itemId, namespace } = {}) {
   };
 }
 
+// The Epic cache stores every accented letter as a literal "?" ("vari?t?", "C?dez"): unreadable, and the
+// original text can't be recovered from it.
+const garbled = (s) => /\p{L}\?\p{L}/u.test(s || '');
+
+// Clean description for a game whose catalog text is garbled: Epic's public store page (older games),
+// then its French Steam page when it is clearly the same game, else nothing (better than broken text).
+async function cleanDescription(title) {
+  const ok = (s) => s && s.length > 20 && !garbled(s);
+  const slug = title.toLowerCase().replace(/[™®©?]/g, '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  try {
+    const r = await getJson(`https://store-content.ak.epicgames.com/api/fr/content/products/${slug}`, 1);
+    const home = (r.pages || []).find((p) => p._slug === 'home') || (r.pages || [])[0];
+    const about = (home && home.data && home.data.about) || {};
+    if (ok(about.shortDescription)) return about.shortDescription.trim();
+  } catch {}
+  try {
+    const item = await findSteamApp(title, { strict: true });
+    const desc = item && similarity(title, item.name) >= 0.8 && (item.basic_info || {}).short_description;
+    if (ok(desc)) return desc.trim();
+  } catch {}
+  return '';
+}
+
 // --- Riot Games: the Riot Client's own theme for each game (library card, background, logo) on Riot's CDN ---
 
 async function riotInfo(product) {
@@ -294,6 +317,7 @@ async function fetchArt(name, id, dir, { appid, steamName, epicNamespace, epicIt
     } catch {}
   }
   if (!info) return null;
+  if (garbled(info.description)) info.description = await cleanDescription(info.steamName || name);
 
   fs.mkdirSync(dir, { recursive: true });
   const stamp = Date.now();
@@ -323,4 +347,4 @@ async function fetchArt(name, id, dir, { appid, steamName, epicNamespace, epicIt
   return out;
 }
 
-module.exports = { fetchArt, steamSearch, similarity };
+module.exports = { fetchArt, steamSearch, similarity, garbled, cleanDescription };

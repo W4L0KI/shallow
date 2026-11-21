@@ -5,7 +5,7 @@ const { pathToFileURL } = require('url');
 const { Library, importKey } = require('./library');
 const { STORES, refreshInstalledPrograms } = require('./stores');
 const { Launcher } = require('./launcher');
-const { fetchArt, steamSearch } = require('./metadata');
+const { fetchArt, steamSearch, garbled, cleanDescription } = require('./metadata');
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'media', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
@@ -163,7 +163,20 @@ async function rescan() {
   const sourcesChanged = library.settings.artVersion !== ART_VERSION;
   for (const g of library.list()) if (needsArt(g, sourcesChanged)) queueArt(g.id);
   if (sourcesChanged) library.updateSettings({ artVersion: ART_VERSION });
+  repairDescriptions();
   return allGames();
+}
+
+// Descriptions saved with "?" instead of accents (Epic cache): replace them, one game at a time.
+const descTried = new Set();
+async function repairDescriptions() {
+  for (const g of library.list()) {
+    if (!garbled(g.description) || descTried.has(g.id)) continue;
+    descTried.add(g.id);
+    const description = await cleanDescription(g.steamName || g.name).catch(() => null);
+    if (description === null || !library.get(g.id)) continue;
+    send('game:updated', decorate(library.update(g.id, { description })));
+  }
 }
 
 // The renderer reports an image that failed to display: fetch it again, once per run.
