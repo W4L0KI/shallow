@@ -298,11 +298,20 @@ img { -webkit-user-drag: none; }
 
 /* Source buttons: their own row under the title, wrapping if there are many launchers */
 .lib-sources { flex-basis: 100%; display: flex; }
-.source-seg { max-width: 100%; flex-wrap: wrap; }
-.source-seg button { display: inline-flex; align-items: center; gap: 7px; }
-.source-seg .ic { width: 15px; height: 15px; opacity: .8; }
-.seg-count { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.source-seg button.active .seg-count { color: var(--text-2); }
+.source-seg { max-width: 100%; flex-wrap: wrap; padding: 4px; gap: 4px; background: rgba(255,255,255,.06); border-color: var(--border-2); }
+.source-seg button {
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 7px;
+  color: var(--text); background: rgba(255,255,255,.04); border: 1px solid transparent;
+  transition: background .2s, border-color .2s, box-shadow .2s;
+}
+.source-seg button:first-child { padding-left: 12px; }
+.source-seg button:hover { background: var(--surface-3); }
+.source-seg button.active {
+  background: rgba(var(--accent-rgb), .2); border-color: rgba(var(--accent-rgb), .55); color: #fff;
+  box-shadow: 0 4px 18px -6px rgba(var(--accent-rgb), .75);
+}
+.seg-count { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 99px; background: rgba(255,255,255,.08); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.source-seg button.active .seg-count { background: rgba(var(--accent-rgb), .4); color: #fff; }
 
 .size-slider { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 .size-slider .ic { width: 15px; height: 15px; }
@@ -743,3 +752,23 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px;
 .toast small { color: var(--text-2); font-size: 12.5px; white-space: pre-line; }
 .toast-action { margin-left: 6px; height: 30px; padding: 0 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600; white-space: nowrap; color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); flex: none; }
 .toast-action:hover { filter: brightness(1.1); }
+
+/* Launcher logos: white glyph on a small tile in the brand's colour */
+.src-logo {
+  width: 20px; height: 20px; border-radius: 6px; flex: none;
+  display: inline-grid; place-items: center; color: #fff; background: var(--surface-3);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 2px 6px rgba(0,0,0,.35);
+}
+.src-logo > svg { width: 12px; height: 12px; }
+.src-logo > .ic { width: 13px; height: 13px; stroke-width: 2.2; opacity: 1; }
+.src-logo-local { background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+.src-logo-steam { background: linear-gradient(135deg, #111d2e, #1387b8); }
+.src-logo-epic { background: linear-gradient(135deg, #3d3d3d, #121212); }
+.src-logo-ea { background: linear-gradient(135deg, #ff5c5c, #e2302f); }
+.src-logo-ubisoft { background: linear-gradient(135deg, #2f80ff, #0050d8); }
+.src-logo-riot { background: linear-gradient(135deg, #ff3346, #c8001e); }
+.src-logo-battlenet { background: linear-gradient(135deg, #2fa8ff, #0a6cd2); }
+.src-logo-gog { background: linear-gradient(135deg, #a94bcc, #682889); }
+.src-logo-xbox { background: linear-gradient(135deg, #22a822, #0e6b0e); }
+.hero-meta .src-logo { width: 18px; height: 18px; border-radius: 5px; }
+.hero-meta .src-logo > svg { width: 11px; height: 11px; }

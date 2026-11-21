@@ -30,7 +30,6 @@ const STATUSES = [
 // [id, label] of every game source: your folders, then each launcher (list sent by the main process).
 const sources = () => [['local', 'Mes dossiers'], ...(state.stores || []).map((s) => [s.id, s.label])];
 const sourceLabel = (id) => (sources().find(([s]) => s === id) || [])[1];
-const sourceIcon = (id) => (ICONS[id] ? id : 'gamepad');
 
 const statusLabel = (id) => (STATUSES.find((s) => s.id === id) || {}).label;
 
@@ -253,7 +252,7 @@ function renderHero() {
   state.selectedId = g.id;
   const bg = media(g.hero || g.cover);
   const meta = [
-    g.source && g.source !== 'local' && `<span>${icon(sourceIcon(g.source))}${esc(sourceLabel(g.source) || g.source)}</span>`,
+    g.source && g.source !== 'local' && `<span>${brandIcon(g.source)}${esc(sourceLabel(g.source) || g.source)}</span>`,
     g.developer && `<span>${esc(g.developer.split(',')[0])}</span>`,
     g.year && `<span>${g.year}</span>`,
     `<span>${icon('clock')}${fmtPlaytime(g.playtime) || 'Jamais joué'}</span>`,
@@ -409,7 +408,7 @@ function renderSort() {
   $('.lib-sources').hidden = present.length < 2;
   $('#sourceSeg').innerHTML = [['', 'Tout'], ...present]
     .map(
-      ([id, l]) => `<button data-source="${id}" class="${state.source === id ? 'active' : ''}">${id ? icon(id === 'local' ? 'folder' : sourceIcon(id)) : ''}
+      ([id, l]) => `<button data-source="${id}" class="${state.source === id ? 'active' : ''}">${id ? brandIcon(id) : ''}
         ${l}<span class="seg-count">${id ? count[id] : Object.values(count).reduce((a, b) => a + b, 0)}</span></button>`
     )
     .join('');
@@ -759,7 +758,7 @@ function openSettings() {
         <div class="toggle-grid">${(state.stores || [])
           .map((st) => {
             const n = [...state.games.values()].filter((g) => g.source === st.id).length;
-            return `<label class="toggle"><div><b>${icon(sourceIcon(st.id), 'inline-ic')}${esc(st.label)}</b><small>${n ? `${n} jeu${n > 1 ? 'x' : ''} importé${n > 1 ? 's' : ''}` : 'Aucun jeu détecté'}</small></div>
+            return `<label class="toggle"><div><b>${brandIcon(st.id)}${esc(st.label)}</b><small>${n ? `${n} jeu${n > 1 ? 'x' : ''} importé${n > 1 ? 's' : ''}` : 'Aucun jeu détecté'}</small></div>
               <span class="switch"><input type="checkbox" data-store="${st.setting}" ${s[st.setting] !== false ? 'checked' : ''}><i></i></span></label>`;
           })
           .join('')}</div>
