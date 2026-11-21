@@ -253,7 +253,8 @@ function renderHero() {
   const bg = media(g.hero || g.cover);
   const meta = [
     g.source && g.source !== 'local' && `<span>${brandIcon(g.source)}${esc(sourceLabel(g.source) || g.source)}</span>`,
-    g.developer && `<span>${esc(g.developer.split(',')[0])}</span>`,
+    // "Riot Games · Riot Games": no need to repeat the launcher when it is also the developer.
+    g.developer && g.developer.split(',')[0].trim() !== sourceLabel(g.source) && `<span>${esc(g.developer.split(',')[0])}</span>`,
     g.year && `<span>${g.year}</span>`,
     `<span>${icon('clock')}${fmtPlaytime(g.playtime) || 'Jamais joué'}</span>`,
     g.lastPlayed && `<span>${icon('gamepad')}${fmtLastPlayed(g.lastPlayed)}</span>`,
